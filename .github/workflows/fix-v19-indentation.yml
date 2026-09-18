@@ -1,0 +1,48 @@
+name: Fix V19 GDScript Indentation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-v19-indentation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize leading indentation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path("game/scripts/main.gd")
+          lines=p.read_text(encoding="utf-8").splitlines()
+          changed=0
+          out=[]
+          for line in lines:
+              m=re.match(r'^( +)(.*)$',line)
+              if m:
+                  spaces=len(m.group(1))
+                  if spaces%4==0:
+                      line="\t"*(spaces//4)+m.group(2)
+                      changed+=1
+              out.append(line)
+          p.write_text("\n".join(out)+"\n",encoding="utf-8")
+          print("Converted leading-space lines:",changed)
+          remain=[(i+1,l) for i,l in enumerate(out) if re.match(r'^ +\S',l)]
+          print("Remaining space-indented lines:",len(remain))
+          if remain:
+              print(remain[:20])
+              raise SystemExit(2)
+          PY
+          git config user.name "Afterfall Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add game/scripts/main.gd
+          git commit -m "Fix V19 GDScript indentation"
+          git push origin HEAD:main
