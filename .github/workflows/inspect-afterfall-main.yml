@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect V18 QA command hook
+      - name: Inspect boss QA and combat progression
         shell: bash
         run: |
           set -euxo pipefail
@@ -23,5 +23,7 @@ jobs:
           unzip -q AfterfallBuriedV18-Project.zip -d /tmp/afterfall
           MAIN="$(find /tmp/afterfall -type f -path '*/scripts/main.gd' -print -quit)"
           test -n "$MAIN"
-          echo "---- qa_v18 references ----"
-          grep -n -C 5 -E 'qa_v18|_run_v18_qa|qa_all' "$MAIN" || true
+          echo "---- QA boss area 6300-6360 ----"
+          nl -ba "$MAIN" | sed -n '6300,6360p'
+          echo "---- boss-related functions ----"
+          grep -n -C 5 -E 'boss|BOSS|combat_victory|boss_progress|bosses' "$MAIN" | head -300
