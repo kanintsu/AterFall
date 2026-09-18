@@ -35,12 +35,12 @@ jobs:
           text = path.read_text(encoding="utf-8")
 
           old = '\t\t\t\tinventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
-          new = '''\t\t\t\tinventory.bandage+=1
-          \t\t\t\tif careful:
-          \t\t\t\t\tinventory.med+=1
-          \t\t\t\telse:
-          \t\t\t\t\tstress=mini(100,stress+2)
-          \t\t\t\t_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'''
+          new = '''\t\t\tinventory.bandage+=1
+          \t\t\tif careful:
+          \t\t\t\tinventory.med+=1
+          \t\t\telse:
+          \t\t\t\tstress=mini(100,stress+2)
+          \t\t\t_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'''
 
           if old not in text:
               raise SystemExit("Expected V18 medical-room syntax was not found; refusing blind edit.")
