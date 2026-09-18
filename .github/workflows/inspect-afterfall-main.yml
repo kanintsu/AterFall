@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract and print failing area
+      - name: Extract and print failing areas
         shell: bash
         run: |
           set -euxo pipefail
@@ -24,5 +24,7 @@ jobs:
           MAIN="$(find /tmp/afterfall -type f -path '*/scripts/main.gd' -print -quit)"
           test -n "$MAIN"
           echo "MAIN=$MAIN"
-          echo "---- lines 6425-6475 ----"
-          nl -ba "$MAIN" | sed -n '6425,6475p'
+          echo "---- lines 1095-1125 ----"
+          nl -ba "$MAIN" | sed -n '1095,1125p'
+          echo "---- lines 6730-6760 ----"
+          nl -ba "$MAIN" | sed -n '6730,6760p'
