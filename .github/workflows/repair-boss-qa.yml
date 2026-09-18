@@ -1,0 +1,71 @@
+name: Repair Legacy Boss QA for V18
+
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-boss-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update legacy boss QA inside project ZIP
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/afterfall-repair
+          mkdir -p /tmp/afterfall-repair
+          unzip -q AfterfallBuriedV18-Project.zip -d /tmp/afterfall-repair
+          MAIN="$(find /tmp/afterfall-repair -type f -path '*/scripts/main.gd' -print -quit)"
+          test -n "$MAIN"
+          export MAIN
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          p = Path(os.environ["MAIN"])
+          s = p.read_text(encoding="utf-8")
+
+          old = '''	_fight_enemy(test_boss, "CENTRO", true)
+          	_combat_melee()
+          	if bosses_defeated < 1 or not bool(discovered_districts.get("ZONA INDUSTRIAL",false)):'''
+
+          new = '''	_fight_enemy(test_boss, "CENTRO", true)
+          	# V18 introduziu distância tática; o Uivador começa LONGE.
+          	# Este QA testa a progressão após a vitória, não o reposicionamento.
+          	v18_combat_range = 1
+          	_combat_melee()
+          	if bosses_defeated < 1 or not bool(discovered_districts.get("ZONA INDUSTRIAL",false)):'''
+
+          if old not in s:
+              raise SystemExit("Legacy boss QA target not found; refusing blind edit.")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Boss QA updated for V18 tactical combat.")
+          PY
+
+          nl -ba "$MAIN" | sed -n '6332,6348p'
+
+          rm -f "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
+          (
+            cd /tmp/afterfall-repair
+            zip -qr "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip" .
+          )
+          test -s "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
+
+      - name: Commit updated project ZIP
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "Afterfall Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add AfterfallBuriedV18-Project.zip
+          git diff --cached --quiet && exit 0
+          git commit -m "Update legacy boss QA for V18 tactical combat"
+          git push origin HEAD:main
