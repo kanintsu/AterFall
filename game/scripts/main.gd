@@ -11,6 +11,7 @@ const WIND_AUDIO := preload("res://assets/audio/wind_loop.wav")
 const V18_URBAN_AUDIO := preload("res://assets/v18/audio/urban_night.wav")
 const V18_INDUSTRIAL_AUDIO := preload("res://assets/v18/audio/industrial_hum.wav")
 const V18_INTERIOR_AUDIO := preload("res://assets/v18/audio/interior_hum.wav")
+const V19_CITY_MAP_TEX := preload("res://assets/v19/city_map.svg")
 
 const V18_LOCATION_TEX := {
 	"SUPERMERCADO": preload("res://assets/v18/supermarket.jpg"),
@@ -227,6 +228,8 @@ const LOCATION_ROOMS := {
 # V18 — salas marcantes. Cada local importante tem pelo menos um encontro que
 # muda a campanha em vez de ser apenas outro clique de loot.
 const V18_SPECIAL_ROOMS := {
+	"SUPERMERCADO|ESCRITÓRIO":{"title":"CADERNO DO ENCARREGADO","text":"Debaixo de notas de estoque há páginas sobre filtragem de água, baterias e manutenção. Não é uma receita pronta, mas é conhecimento que pode voltar ao abrigo.","kind":"document","skill":"electronics","chain":"first_manual"},
+	"POSTO|ESTOQUE":{"title":"PEÇAS SEPARADAS PARA UMA FUGA","text":"Uma caixa de manutenção tem correias, terminais e uma bateria marcada para uma caminhonete. Alguém planejava sair e não conseguiu.","kind":"mechanics","skill":"mechanics","chain":"first_vehicle_parts"},
 	"SUPERMERCADO|AÇOUGUE":{"title":"O FRIO PAROU, O CHEIRO NÃO","text":"A câmara do açougue está aberta. Caixas térmicas foram empilhadas contra a parede e alguém escreveu datas nelas antes da energia cair.","kind":"food","skill":"cooking","chain":"cold_store"},
 	"FARMÁCIA|SALA DOS FUNDOS":{"title":"RECEITAS SEM PACIENTES","text":"Prontuários, antibióticos separados à mão e uma lista de apartamentos. Um nome aparece várias vezes ao lado de '302'.","kind":"medical","skill":"medicine","chain":"patient_302"},
 	"OFICINA|GARAGEM":{"title":"UM MOTOR QUE AINDA PODE VOLTAR","text":"Há uma caminhonete desmontada sobre cavaletes. O motor não está morto — faltam peças e alguém sabia exatamente quais.","kind":"mechanics","skill":"mechanics","chain":"vehicle_parts"},
@@ -1299,6 +1302,170 @@ func _boss_encounter(boss_name: String, location_name: String) -> void:
 	_open_modal(boss_name, "[b]AMEAÇA DE BOSS[/b]\n\nA presença dessa criatura mudou toda a região.\n\nPoder recomendado: %d\nSeu poder atual: %d\nVida estimada: %d\n\n[color=#8f2b28]Você pode encontrá-la cedo demais e fugir. Volte melhor equipado.[/color]" % [int(b.hp) - 35, power, int(b.hp)], [["ENFRENTAR", func(): _close_modal(); _fight_enemy(enemy, location_name, true)], ["RECUAR", Callable(self,"_return_to_map")]])
 	_show_modal_art(LOCATION_TEX.get(location_name, SHELTER_THUMB))
 
+# -----------------------------------------------------------------------------
+# AFTERFALL V19 — immersion rebuild, touch scroll, field map and research
+# -----------------------------------------------------------------------------
+func _v19_clear_named(parent:Node,prefix:String) -> void:
+    for child in parent.get_children():
+        if str(child.name).begins_with(prefix): child.queue_free()
+
+func _v19_tip() -> String:
+    var tips:Array[String]=[
+        "Nem todo infectado precisa morrer. Voltar vivo com o objetivo vale mais que uma luta desnecessária.",
+        "Ferramentas barulhentas abrem caminhos rápidos, mas o som continua existindo depois que a porta abre.",
+        "Livros, diagramas e equipamentos intactos podem valer mais na bancada de pesquisa do que desmontados na rua.",
+        "Chuva piora a visibilidade, mas pode esconder parte do barulho dos seus passos.",
+        "Profissões mudam o que um sobrevivente percebe. Um mecânico enxerga peças onde outra pessoa vê sucata.",
+        "Peso demais transforma a volta em outra expedição. Deixe espaço para aquilo que você realmente veio buscar.",
+        "Uma rota familiar reduz incerteza. Isso não significa que a cidade parou de mudar.",
+        "Algumas consequências demoram dias. Nem toda boa decisão parece boa imediatamente.",
+        "Voltar antes do anoitecer é uma estratégia. Ficar até tarde também pode ser, se você preparou um ponto seguro.",
+        "O abrigo melhora quando aquilo que você encontra lá fora vira algo físico aqui dentro."
+    ]
+    return tips[rng.randi_range(0,tips.size()-1)]
+
+func _v19_hint_once(id:String,message:String) -> void:
+    var key:="v19_hint_"+id
+    if bool(event_flags.get(key,false)): return
+    event_flags[key]=true
+    _toast(message)
+    _save_game()
+
+func _v19_intro_tutorial() -> void:
+    if bool(event_flags.get("v19_tutorial_intro",false)): return
+    event_flags["v19_tutorial_intro"]=true
+    _save_game()
+    _open_modal("PRIMEIRO DIA","[b]VOCÊ NÃO PRECISA DECORAR O JOGO.[/b]\n\nToque nos objetos do abrigo para usá-los. A porta abre o mapa. A bancada guarda pesquisa e projetos. O estoque abre a mochila.\n\nCada viagem gasta [b]tempo, água e condição física[/b]. Dentro dos locais, procure objetos e cômodos que façam sentido — prateleiras, armários, oficinas, veículos, arquivos.\n\nSeu primeiro objetivo é simples: [b]voltar vivo com alguma coisa útil[/b]. Manuais e peças raras podem abrir novas tecnologias.",[["ENTENDI • EXPLORAR O ABRIGO",Callable(self,"_close_modal")],["ABRIR O MAPA",func(): _close_modal(); _show_map()]])
+
+func _v19_current_objective() -> String:
+    if not bool(event_flags.get("shelter_searched",false)): return "Examine o abrigo e encontre algo que permita sua primeira saída."
+    if not bool(event_flags.get("v19_bp_first_manual",false)): return "Procure comida e conhecimento no Supermercado. O escritório pode guardar mais que mantimentos."
+    if int(upgrades.get("workbench",0))<=0: return "Leve sucata e madeira para montar uma Mesa de Estudos no abrigo."
+    if not bool(event_flags.get("v19_project_filter",false)): return "Use o manual encontrado para pesquisar um sistema melhor de água."
+    if not bool(vehicles.get("CARRO",{}).get("found",false)): return "Siga pistas mecânicas entre Oficina, Posto e Ferro-Velho."
+    return "Escolha uma necessidade real do abrigo e planeje a próxima expedição."
+
+func _v19_show_arrival(name:String) -> void:
+    var spec:Dictionary=CITY_LOCATIONS.get(name,{})
+    var state:=_location_state_line(name)
+    var knowledge:=int(v18_location_knowledge.get(name,0))
+    var body:="[font_size=22][b]%s[/b][/font_size]\n\n%s\n\n[color=#ad9877]Estado: %s • risco %d/100 • conhecimento local %d[/color]\n\nVocê chegou até aqui. Antes de tocar em qualquer porta, ainda pode decidir como entrar.\n\n[color=#b99a68][b]DICA[/b][/color]  %s"%[name,str(V18_LOCATION_FLAVOR.get(name,"O lugar parece diferente visto de perto.")),state,int(spec.get("risk",0)),knowledge,_v19_tip()]
+    _v8_show_page("journal","CHEGADA • "+name,"PARE. OLHE. ESCUTE.",body,[])
+    _v9_set_immersive_page(true); v8_page_bg.texture=_v8_location_texture(name); v8_page_shade.color=Color(0.005,0.005,0.004,0.30)
+    v8_page_side.visible=true; _v8_clear_actions(v8_page_actions)
+    _v17_side_note("ANTES DE ENTRAR","Observar custa tempo, mas pode revelar perigo. Entrar rápido economiza minutos e aumenta ruído.",145)
+    _v17_side_button("OBSERVAR A ÁREA • 5 MIN",func(): _v19_enter_location(name,"observe"))
+    _v17_side_button("ENTRAR COM CUIDADO",func(): _v19_enter_location(name,"quiet"))
+    _v17_side_button("ENTRAR RÁPIDO",func(): _v19_enter_location(name,"fast"))
+    _v17_side_button("VOLTAR PELAS RUAS",Callable(self,"_v8_begin_return_trip"))
+
+func _v19_enter_location(name:String,mode:String) -> void:
+    match mode:
+        "observe":
+            _v12_advance_time(5,"observar "+name.to_lower(),0.05,true)
+            v18_location_knowledge[name]=int(v18_location_knowledge.get(name,0))+1
+            threat=maxi(0,threat-1)
+        "quiet":
+            noise=maxi(0,noise-2)
+            _v12_advance_time(2,"aproximação cuidadosa",0.03,true)
+        "fast":
+            noise=mini(100,noise+7); fatigue=mini(100,fatigue+1)
+    _save_game(); _v8_show_location_screen(name)
+
+func _v19_room_hint(room:String) -> String:
+    var r:=room.to_upper()
+    if "GARAGEM" in r or "PÁTIO DE CARROS" in r: return "VEÍCULOS / FERRAMENTAS • toque para inspecionar"
+    if "ESTOQUE" in r or "DEPÓSITO" in r or "ALMOXARIFADO" in r: return "PRATELEIRAS / ARMÁRIOS • toque para vasculhar"
+    if "ESCRITÓRIO" in r or "ARQUIVO" in r or "ESTUDO" in r: return "PAPÉIS / GAVETAS / PISTAS • toque para entrar"
+    if "FARMÁCIA" in r or "ENFERMARIA" in r or "CIRURGIA" in r: return "ARMÁRIOS MÉDICOS / EQUIPAMENTO • toque para entrar"
+    if "COZINHA" in r or "AÇOUGUE" in r or "CÂMARA" in r: return "ALIMENTOS / RECIPIENTES • toque para examinar"
+    if "ELÉTR" in r or "CONTROLE" in r or "TRANSFORM" in r: return "PAINÉIS / CABOS / COMPONENTES • toque para examinar"
+    if "BIBLIOTECA" in r or "TÉCNICOS" in r: return "LIVROS / MANUAIS / MAPAS • toque para procurar"
+    if "TELHADO" in r or "TORRE" in r: return "PONTO DE OBSERVAÇÃO / SINAL • toque para subir"
+    return "OBJETOS E CANTOS AINDA NÃO EXAMINADOS • toque para entrar"
+
+func _v19_unlock_blueprint_from_discovery(location_name:String,room_name:String,chain:String) -> void:
+    var bp:=""
+    var label:=""
+    if chain=="first_manual": bp="first_manual"; label="Caderno de manutenção e filtragem"
+    elif chain=="vehicle_parts" or chain=="first_vehicle_parts": bp="vehicle"; label="Conjunto de notas mecânicas"
+    elif chain=="surgery_grid": bp="power"; label="Diagrama de energia de emergência"
+    elif chain=="sample_14": bp="lab"; label="Procedimento de análise de amostras"
+    if bp=="": return
+    var key:="v19_bp_"+bp
+    if bool(event_flags.get(key,false)): return
+    event_flags[key]=true
+    research_points+=1
+    _add_event("PESQUISA","Conhecimento recuperado: %s. A bancada do abrigo agora pode transformar isso em um projeto."%label)
+
+func _v19_research_projects() -> Array:
+    return [
+        {"id":"study","name":"MESA DE ESTUDOS","desc":"Organize ferramentas, manuais e peças para transformar descobertas em projetos reproduzíveis.","need":"2 sucata • 2 madeira • 45 min"},
+        {"id":"filter","name":"FILTRO DE ÁGUA II","desc":"Camadas substituíveis de carvão e tecido. Água deixa de ser apenas loot e vira infraestrutura.","need":"2 pesquisa • 2 sucata • 1 tecido • 60 min"},
+        {"id":"pack","name":"MOCHILA ESTRUTURADA","desc":"Armação reaproveitada distribui melhor o peso e aumenta a capacidade de retorno.","need":"3 pesquisa • 2 tecido • 1 peça mecânica • 70 min"},
+        {"id":"generator","name":"GERADOR SILENCIOSO","desc":"Reorganiza admissão e isolamento para manter energia com menos ruído e falhas.","need":"4 pesquisa • 2 peças • 2 eletrônicos • 1 combustível • 90 min"},
+        {"id":"fieldlab","name":"KIT DE ANÁLISE","desc":"Microscopia improvisada e reagentes básicos para entender doença e mutação no abrigo.","need":"4 pesquisa • 1 remédio • 1 eletrônico • 75 min"}
+    ]
+
+func _v19_project_known(id:String) -> bool:
+    match id:
+        "study": return true
+        "filter": return bool(event_flags.get("v19_bp_first_manual",false))
+        "pack": return bool(event_flags.get("v19_bp_vehicle",false))
+        "generator": return bool(event_flags.get("v19_bp_power",false))
+        "fieldlab": return bool(event_flags.get("v19_bp_lab",false))
+    return false
+
+func _v19_project_done(id:String) -> bool:
+    if id=="study": return int(upgrades.get("workbench",0))>0
+    return bool(event_flags.get("v19_project_"+id,false))
+
+func _v19_research_card(project:Dictionary) -> Button:
+    var id:=str(project.id); var known:=_v19_project_known(id); var done:=_v19_project_done(id)
+    var edge:=GREEN if done else (GOLD if known else Color("#4f4b42"))
+    var b:=Button.new(); b.custom_minimum_size=Vector2(360,190); b.focus_mode=Control.FOCUS_NONE; b.text=""; b.disabled=not known or done; b.add_theme_stylebox_override("normal",_flat(Color(0.025,0.022,0.018,0.96),edge,6,2)); b.add_theme_stylebox_override("hover",_flat(Color(0.095,0.064,0.039,0.98),edge.lightened(0.18),6,3))
+    var name_l:=Label.new(); name_l.position=Vector2(18,16); name_l.size=Vector2(325,31); name_l.text=str(project.name); name_l.add_theme_font_size_override("font_size",18); name_l.add_theme_color_override("font_color",BONE); name_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(name_l)
+    var desc:=Label.new(); desc.position=Vector2(18,54); desc.size=Vector2(325,78); desc.text=str(project.desc) if known else "PROJETO NÃO COMPREENDIDO. Encontre um manual, diagrama ou equipamento relacionado."; desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; desc.add_theme_font_size_override("font_size",11); desc.add_theme_color_override("font_color",MUTED); desc.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(desc)
+    var need:=Label.new(); need.position=Vector2(18,140); need.size=Vector2(325,36); need.text="CONCLUÍDO" if done else (str(project.need) if known else "CONHECIMENTO AUSENTE"); need.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; need.add_theme_font_size_override("font_size",10); need.add_theme_color_override("font_color",edge.lightened(0.25)); need.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(need)
+    if known and not done: b.pressed.connect(func(): _v19_build_project(id))
+    return b
+
+func _v19_show_research_bench() -> void:
+    _v8_show_page("craft","BANCADA DE PESQUISA","DESCUBRA FORA. ENTENDA AQUI. CONSTRUA DEPOIS.","",[])
+    _v9_set_immersive_page(true); v8_page_bg.texture=V8_SCREEN_TEX["craft"]; v8_page_shade.color=Color(0.006,0.006,0.005,0.42)
+    v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
+    v8_page_cards.visible=false; v8_page_body.visible=true; v8_page_body.position=Vector2(24,18); v8_page_body.size=Vector2(1060,74)
+    v8_page_body.text="[b]Conhecimento disponível: %d[/b] • bancada Nv.%d\nManuais e equipamentos encontrados no mundo liberam projetos. Pesquisar consome tempo da campanha, nunca tempo real."%[research_points,int(upgrades.get("workbench",0))]
+    _v19_clear_named(v8_page_info,"V19Research")
+    var scroll:=ScrollContainer.new(); scroll.name="V19ResearchScroll"; scroll.position=Vector2(20,102); scroll.size=Vector2(1080,548); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; v8_page_info.add_child(scroll)
+    var grid:=GridContainer.new(); grid.columns=2; grid.custom_minimum_size=Vector2(1044,0); grid.add_theme_constant_override("h_separation",14); grid.add_theme_constant_override("v_separation",14); scroll.add_child(grid)
+    for project in _v19_research_projects(): grid.add_child(_v19_research_card(project))
+    _v8_clear_actions(v8_page_actions); _v17_side_note("COMO APRENDER","Documentos, livros, máquinas e peças intactas podem abrir pesquisas. Nem todo objeto raro deve ser usado imediatamente.",190)
+    _v17_side_button("CRAFTING",Callable(self,"_show_crafting_panel")); _v17_side_button("PRODUÇÃO DO ABRIGO",Callable(self,"_show_production_panel")); _v17_side_button("MOCHILA",Callable(self,"_show_inventory_panel")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter"))
+    _mark_nav("craft"); _v19_hint_once("research","DICA: alguns itens valem mais como conhecimento. Levar um manual intacto ao abrigo pode mudar toda a campanha.")
+
+func _v19_build_project(id:String) -> void:
+    if not _v19_project_known(id): _toast("Você ainda não entende esse projeto."); return
+    if _v19_project_done(id): _toast("Projeto já concluído."); return
+    match id:
+        "study":
+            if int(inventory.scrap)<2 or int(materials.wood)<2: _toast("Faltam 2 sucatas e 2 madeiras."); return
+            inventory.scrap-=2; materials.wood-=2; upgrades.workbench=maxi(1,int(upgrades.get("workbench",0))); _v12_advance_time(45,"montar mesa de estudos",0.10,true)
+        "filter":
+            if research_points<2 or int(inventory.scrap)<2 or int(inventory.cloth)<1: _toast("Faltam pesquisa, sucata ou tecido."); return
+            research_points-=2; inventory.scrap-=2; inventory.cloth-=1; upgrades.filter=maxi(1,int(upgrades.get("filter",0))); event_flags["v19_project_filter"]=true; _v12_advance_time(60,"pesquisar filtro de água",0.12,true)
+        "pack":
+            if research_points<3 or int(inventory.cloth)<2 or int(materials.mechanical)<1: _toast("Faltam pesquisa, tecido ou peça mecânica."); return
+            research_points-=3; inventory.cloth-=2; materials.mechanical-=1; backpack_level+=1; event_flags["v19_project_pack"]=true; _v12_advance_time(70,"montar mochila estruturada",0.13,true)
+        "generator":
+            if research_points<4 or int(materials.mechanical)<2 or int(materials.electronics)<2 or int(inventory.fuel)<1: _toast("Faltam pesquisa, peças, eletrônicos ou combustível."); return
+            research_points-=4; materials.mechanical-=2; materials.electronics-=2; inventory.fuel-=1; event_flags["v19_project_generator"]=true; radio_signal=mini(100,radio_signal+8); shelter_heat=mini(100,shelter_heat+8); _v12_advance_time(90,"adaptar gerador silencioso",0.16,true)
+        "fieldlab":
+            if research_points<4 or int(inventory.med)<1 or int(materials.electronics)<1: _toast("Faltam pesquisa, remédio ou eletrônico."); return
+            research_points-=4; inventory.med-=1; materials.electronics-=1; event_flags["v19_project_fieldlab"]=true; field_medicine+=1; upgrades.infirmary=maxi(1,int(upgrades.get("infirmary",0))); _v12_advance_time(75,"montar kit de análise",0.13,true)
+    _add_event("PESQUISA","Projeto concluído na bancada: %s."%id.to_upper())
+    _save_game(); _update_all(); _v19_show_research_bench()
+
 func _ready() -> void:
 	rng.randomize()
 	_load_profile_settings()
@@ -1566,7 +1733,7 @@ func _build_menu() -> void:
 		if str(spec[0]).begins_with("CONTINUAR") and not has_save: b.disabled=true
 
 	menu_save_label=Label.new(); menu_save_label.position=Vector2(38,705); menu_save_label.size=Vector2(450,50); menu_save_label.add_theme_font_size_override("font_size",14); menu_save_label.add_theme_color_override("font_color",MUTED); left_plate.add_child(menu_save_label)
-	var version := Label.new(); version.position=Vector2(38,775); version.size=Vector2(460,35); version.text="V18 • exploração narrativa, rotas e combate tático"; version.add_theme_font_size_override("font_size",14); version.add_theme_color_override("font_color",Color("#786f61")); left_plate.add_child(version)
+	var version := Label.new(); version.position=Vector2(38,775); version.size=Vector2(460,35); version.text="V19 • mundo físico, pesquisa, retratos e exploração imersiva"; version.add_theme_font_size_override("font_size",14); version.add_theme_color_override("font_color",Color("#786f61")); left_plate.add_child(version)
 
 	# Dossiê do sobrevivente selecionado — muda quando o jogador escolhe um legado.
 	var dossier:=Panel.new(); dossier.position=Vector2(1050,96); dossier.size=Vector2(520,690); dossier.add_theme_stylebox_override("panel",_paper_style()); menu_layer.add_child(dossier); _add_texture_backdrop(dossier,PAPER_PANEL_TEX,0.45)
@@ -2109,7 +2276,7 @@ func _build_v17_command_menu() -> void:
 		["MISSÕES","Histórias, contratos e urgências","missions",Callable(self,"_show_missions_panel")],
 		["COMUNIDADE","Pessoas, relações e funções","community",Callable(self,"_show_community_panel")],
 		["SAÚDE","Corpo, doenças e enfermaria","body",Callable(self,"_v12_show_health_environment")],
-		["PRODUÇÃO","Oficina, abrigo e projetos","production",Callable(self,"_show_production_panel")],
+		["PESQUISA / OFICINA","Tecnologia, projetos e construção","production",Callable(self,"_v19_show_research_bench")],
 		["RÁDIO / MUNDO","Notícias, sinais e facções","world",Callable(self,"_show_radio_panel")],
 		["DIÁRIO","Linha do tempo desta campanha","journal",Callable(self,"_show_journal_panel")],
 		["PERFIL","Legado, desafios e progresso","profile",Callable(self,"_v12_show_profile")]
@@ -2273,12 +2440,14 @@ func _start_new_game(ask: bool = true) -> void:
 	_save_game()
 
 func _show_game() -> void:
-	current_screen = "game"
-	menu_layer.visible = false
-	game_layer.visible = true
-	overlay_layer.visible = false
-	_show_shelter()
-	_update_all()
+    current_screen = "game"
+    menu_layer.visible = false
+    game_layer.visible = true
+    overlay_layer.visible = false
+    _show_shelter()
+    _update_all()
+    if not bool(event_flags.get("v19_tutorial_intro",false)):
+        call_deferred("_v19_intro_tutorial")
 
 func _continue_game() -> void:
 	if not _load_game():
@@ -2340,10 +2509,11 @@ func _v12_set_shelter_immersive(enabled: bool) -> void:
 
 
 func _v12_update_shelter_context() -> void:
-	if shelter_context_label==null: return
-	var state:="CALMO" if threat<35 else ("ATENTO" if threat<65 else "AMEAÇADO")
-	var objective:="Vasculhe o abrigo e prepare a primeira saída." if not bool(event_flags.get("shelter_searched",false)) else "Planeje a próxima saída antes que escureça."
-	shelter_context_label.text="ABRIGO • %s • estrutura %d%%\n%s • %d°C • vento %s %d km/h\n%s"%[state,shelter_integrity,weather,temperature,wind_direction,wind_speed,objective]
+    if shelter_context_label==null: return
+    var state:="CALMO" if threat<35 else ("ATENTO" if threat<65 else "AMEAÇADO")
+    var objective:="Vasculhe o abrigo e prepare a primeira saída." if not bool(event_flags.get("shelter_searched",false)) else _v19_current_objective()
+    var research_state:="improvisada" if int(upgrades.get("workbench",0))<=0 else ("funcional" if int(upgrades.get("workbench",0))==1 else "avançada")
+    shelter_context_label.text="ABRIGO • %s • estrutura %d%%\n%s • %d°C • pesquisa %s\n%s"%[state,shelter_integrity,weather,temperature,research_state,objective]
 
 func _show_shelter() -> void:
 	_v17_close_command_menu()
@@ -2414,25 +2584,30 @@ func _v12_icon(key:String,fallback:Texture2D) -> Texture2D:
 	return fallback
 
 func _show_inventory_panel() -> void:
-	_v8_show_page("inventory","MOCHILA / EQUIPAMENTO","O QUE VOCÊ CARREGA MUDA COMO VOCÊ SOBREVIVE","",[])
-	_v9_set_immersive_page(true); v8_page_bg.texture=V8_SCREEN_TEX["inventory"]; v8_page_shade.color=Color(0.008,0.008,0.007,0.52)
-	v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
-	v8_page_body.visible=true; v8_page_body.position=Vector2(24,22); v8_page_body.size=Vector2(286,620)
-	var weight_now:=_total_weight(); var weight_max:=_max_weight(); var load_state:="LEVE" if weight_now<float(weight_max)*0.55 else ("PESADA" if weight_now<float(weight_max)*0.90 else "SOBRECARGA")
-	v8_page_body.text="[font_size=27][b]VOCÊ[/b][/font_size]\n\n[b]Arma principal[/b]\n%s\n\n[b]Corpo a corpo[/b]\n%s\n\n[b]Roupa[/b]\n%s  •  %d%%\n\n[b]Mochila Nv.%d[/b]\n%d / %d kg\n[color=#b69763]%s[/color]\n\n[color=#908470]Peso alto aumenta fadiga, tempo de viagem e ruído.[/color]"%[equipped_firearm,equipped_melee,equipped_clothing,int(clothing_condition.get(equipped_clothing,100)),backpack_level,weight_now,weight_max,load_state]
-	v8_page_cards.visible=true; v8_page_cards.columns=4; v8_page_cards.position=Vector2(330,34); v8_page_cards.size=Vector2(760,610); v8_page_cards.add_theme_constant_override("h_separation",10); v8_page_cards.add_theme_constant_override("v_separation",10)
-	for c in v8_page_cards.get_children(): c.queue_free()
-	var specs:Array=[
-		["knife","FACA",int(inventory.knife),_v12_icon("knife",ICONS["knife"])],["pistol","PISTOLA",int(inventory.pistol),_v12_icon("pistol",ICONS["pistol"])],["ammo","MUNIÇÃO",int(inventory.ammo),ICONS["ammo"]],["food","COMIDA",int(inventory.food),_v12_icon("food",ICONS["food"])],
-		["water","ÁGUA",int(inventory.water),_v12_icon("water",ICONS["water"])],["dirty_water","ÁGUA SUJA",int(inventory.dirty_water),_v12_icon("dirty_water",ICONS["water"])],["med","REMÉDIO",int(inventory.med),_v12_icon("med",ICONS["med"])],["bandage","BANDAGEM",int(inventory.bandage),_v12_icon("med",ICONS["med"])],
-		["wood","MADEIRA",int(materials.wood),_v12_icon("wood",ICONS["scrap"])],["nails","PREGOS",int(materials.nails),_v12_icon("nails",ICONS["scrap"])],["wire","FIO",int(materials.wire),_v12_icon("wire",ICONS["scrap"])],["steel","AÇO",int(materials.steel),_v12_icon("steel",ICONS["scrap"])],
-		["mechanical","PEÇAS",int(materials.mechanical),_v12_icon("mechanical",ICONS["scrap"])],["electronics","ELETRÔNICOS",int(materials.electronics),_v12_icon("electronics2",ICONS["scrap"])],["raw_meat","CARNE CRUA",int(materials.raw_meat),_v12_icon("raw_meat",ICONS["food"])],["vegetables","VEGETAIS",int(materials.vegetables),_v12_icon("vegetables",ICONS["food"])],
-		["cloth","TECIDO",int(inventory.cloth),_v12_icon("cloth",ICONS["cloth"])],["fuel","COMBUSTÍVEL",int(inventory.fuel),_v12_icon("fuel",ICONS["water"])],["battery","BATERIAS",int(materials.battery),_v12_icon("battery2",ICONS["scrap"])],["seeds","SEMENTES",int(materials.seeds),_v12_icon("seeds",ICONS["food"])]
-	]
-	for spec in specs: v8_page_cards.add_child(_v17_inventory_card(str(spec[0]),str(spec[1]),int(spec[2]),spec[3]))
-	_v8_clear_actions(v8_page_actions); _v17_side_note("EQUIPAMENTO","Selecione um item para examinar, usar ou entender onde ele entra no crafting.",150)
-	_v17_side_button("ROUPAS / CAMADAS",Callable(self,"_v14_show_clothing")); _v17_side_button("ALIMENTAÇÃO",Callable(self,"_show_food_panel")); _v17_side_button("CRAFTING",Callable(self,"_show_crafting_panel")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter"))
-	_mark_nav("inventory")
+    _v8_show_page("inventory","MOCHILA / EQUIPAMENTO","O QUE VOCÊ CARREGA MUDA COMO VOCÊ SOBREVIVE","",[])
+    _v9_set_immersive_page(true); v8_page_bg.texture=V8_SCREEN_TEX["inventory"]; v8_page_shade.color=Color(0.008,0.008,0.007,0.50)
+    v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
+    v8_page_cards.visible=false
+    _v19_clear_named(v8_page_info,"V19Inventory")
+    var weight_now:=_total_weight(); var weight_max:=_max_weight(); var load_state:="LEVE" if weight_now<float(weight_max)*0.55 else ("PESADA" if weight_now<float(weight_max)*0.90 else "SOBRECARGA")
+    var profile:=Panel.new(); profile.name="V19InventoryProfile"; profile.position=Vector2(20,20); profile.size=Vector2(286,620); profile.add_theme_stylebox_override("panel",_flat(Color(0.018,0.017,0.015,0.91),Color("#665946"),6,2)); v8_page_info.add_child(profile)
+    var portrait:=TextureRect.new(); portrait.position=Vector2(27,24); portrait.size=Vector2(232,230); portrait.texture=_v12_portrait_texture(selected_character_id); portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE; profile.add_child(portrait)
+    var shade:=ColorRect.new(); shade.position=Vector2(27,194); shade.size=Vector2(232,60); shade.color=Color(0,0,0,0.62); shade.mouse_filter=Control.MOUSE_FILTER_IGNORE; profile.add_child(shade)
+    var who:=Label.new(); who.position=Vector2(38,203); who.size=Vector2(210,44); who.text=str(_v10_get_selected_character().get("name","SOBREVIVENTE")); who.add_theme_font_size_override("font_size",19); who.add_theme_color_override("font_color",BONE); who.mouse_filter=Control.MOUSE_FILTER_IGNORE; profile.add_child(who)
+    var info:=RichTextLabel.new(); info.position=Vector2(24,278); info.size=Vector2(238,314); info.bbcode_enabled=true; info.add_theme_font_size_override("normal_font_size",15); info.add_theme_color_override("default_color",BONE); info.text="[b]ARMA[/b]  %s\n[b]CORPO A CORPO[/b]  %s\n[b]ROUPA[/b]  %s • %d%%\n\n[b]MOCHILA Nv.%d[/b]\n%d / %d kg • [color=#c7a36a]%s[/color]\n\n[color=#938673]Peso alto aumenta fadiga, viagem e ruído. Arraste a lista ao lado para ver todos os itens.[/color]"%[equipped_firearm,equipped_melee,equipped_clothing,int(clothing_condition.get(equipped_clothing,100)),backpack_level,weight_now,weight_max,load_state]; profile.add_child(info)
+    var scroll:=ScrollContainer.new(); scroll.name="V19InventoryScroll"; scroll.position=Vector2(320,20); scroll.size=Vector2(780,620); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; v8_page_info.add_child(scroll)
+    var grid:=GridContainer.new(); grid.name="V19InventoryGrid"; grid.columns=4; grid.custom_minimum_size=Vector2(744,0); grid.add_theme_constant_override("h_separation",10); grid.add_theme_constant_override("v_separation",10); scroll.add_child(grid)
+    var specs:Array=[
+        ["knife","FACA",int(inventory.knife),_v12_icon("knife",ICONS["knife"])],["pistol","PISTOLA",int(inventory.pistol),_v12_icon("pistol",ICONS["pistol"])],["ammo","MUNIÇÃO",int(inventory.ammo),ICONS["ammo"]],["food","COMIDA",int(inventory.food),_v12_icon("food",ICONS["food"])],
+        ["water","ÁGUA",int(inventory.water),_v12_icon("water",ICONS["water"])],["dirty_water","ÁGUA SUJA",int(inventory.dirty_water),_v12_icon("dirty_water",ICONS["water"])],["med","REMÉDIO",int(inventory.med),_v12_icon("med",ICONS["med"])],["bandage","BANDAGEM",int(inventory.bandage),_v12_icon("med",ICONS["med"])],
+        ["wood","MADEIRA",int(materials.wood),_v12_icon("wood",ICONS["scrap"])],["nails","PREGOS",int(materials.nails),_v12_icon("nails",ICONS["scrap"])],["wire","FIO",int(materials.wire),_v12_icon("wire",ICONS["scrap"])],["steel","AÇO",int(materials.steel),_v12_icon("steel",ICONS["scrap"])],
+        ["mechanical","PEÇAS",int(materials.mechanical),_v12_icon("mechanical",ICONS["scrap"])],["electronics","ELETRÔNICOS",int(materials.electronics),_v12_icon("electronics2",ICONS["scrap"])],["raw_meat","CARNE CRUA",int(materials.raw_meat),_v12_icon("raw_meat",ICONS["food"])],["vegetables","VEGETAIS",int(materials.vegetables),_v12_icon("vegetables",ICONS["food"])],
+        ["cloth","TECIDO",int(inventory.cloth),_v12_icon("cloth",ICONS["cloth"])],["fuel","COMBUSTÍVEL",int(inventory.fuel),_v12_icon("fuel",ICONS["water"])],["battery","BATERIAS",int(materials.battery),_v12_icon("battery2",ICONS["scrap"])],["seeds","SEMENTES",int(materials.seeds),_v12_icon("seeds",ICONS["food"])]
+    ]
+    for spec in specs: grid.add_child(_v17_inventory_card(str(spec[0]),str(spec[1]),int(spec[2]),spec[3]))
+    _v8_clear_actions(v8_page_actions); _v17_side_note("MOCHILA","Arraste para cima e para baixo. Toque num item para examinar, usar ou descobrir para que ele serve.",155)
+    _v17_side_button("ROUPAS / CAMADAS",Callable(self,"_v14_show_clothing")); _v17_side_button("ALIMENTAÇÃO",Callable(self,"_show_food_panel")); _v17_side_button("PESQUISA / BANCADA",Callable(self,"_v19_show_research_bench")); _v17_side_button("CRAFTING",Callable(self,"_show_crafting_panel")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter"))
+    _mark_nav("inventory"); _v19_hint_once("inventory_scroll","DICA: arraste a mochila para cima e para baixo. Peso muda fadiga, ruído e tempo de viagem.")
 
 func _v8_make_inventory_card(key: String, label_text: String, count: int, tex: Texture2D) -> Button:
 	var b:=Button.new(); b.custom_minimum_size=Vector2(148,122); b.focus_mode=Control.FOCUS_NONE; b.text=""
@@ -2465,8 +2640,7 @@ func _v8_inventory_select(key: String, label_text: String, count: int) -> void:
 	var back:=_make_dark_button("FECHAR MOCHILA",Vector2(438,50)); back.pressed.connect(_show_shelter); v8_page_actions.add_child(back)
 
 func _show_workbench() -> void:
-	_show_crafting_panel()
-	_toast("A oficina range quando você encosta na bancada.")
+    _v19_show_research_bench()
 
 func _show_crafting_panel() -> void:
 	_v8_show_page("craft","OFICINA / CRAFTING","CONHECIMENTO + FERRAMENTA + MATERIAL + TEMPO","",[])
@@ -2665,23 +2839,22 @@ func _upgrade(key: String) -> void:
 	_update_all(); _save_game(); _show_upgrades_panel(); _toast("Melhoria concluída.")
 
 func _v8_show_map_screen() -> void:
-	_v8_show_page("journal","MAPA / EXPEDIÇÃO","A CIDADE MUDA. SUAS ROTAS TAMBÉM.","",[])
-	_v9_set_immersive_page(true); v8_page_bg.texture=V8_STREET_TEX["CENTRO"]; v8_page_shade.color=Color(0.008,0.010,0.010,0.66)
-	v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
-	v8_page_body.visible=true; v8_page_body.position=Vector2(24,16); v8_page_body.size=Vector2(1060,66); v8_page_body.text="%s • %s • %d°C • vento %s %d km/h • infecção %d/100\nPôr do sol %s. Toque num ponto conhecido para planejar a expedição."%[_v12_clock_text(),weather,temperature,wind_direction,wind_speed,mutation_pressure,_v12_format_minutes(sunset_minute)]
-	v8_page_cards.visible=false
-	for c in v8_page_info.get_children():
-		if str(c.name).begins_with("V17Map"): c.queue_free()
-	var canvas:=Panel.new(); canvas.name="V17MapCanvas"; canvas.position=Vector2(22,92); canvas.size=Vector2(1075,555); canvas.add_theme_stylebox_override("panel",_flat(Color(0.025,0.028,0.027,0.94),Color("#645c4d"),6,2)); v8_page_info.add_child(canvas); _add_texture_backdrop(canvas,PAPER_TEX,0.10)
-	# Estradas esquemáticas: o mapa é uma peça de gameplay, não uma foto da cidade.
-	_v17_add_map_road(canvas,Vector2(95,390),Vector2(440,270),6); _v17_add_map_road(canvas,Vector2(440,270),Vector2(780,345),6); _v17_add_map_road(canvas,Vector2(440,270),Vector2(470,455),5); _v17_add_map_road(canvas,Vector2(780,345),Vector2(875,155),5); _v17_add_map_road(canvas,Vector2(470,455),Vector2(780,345),4); _v17_add_map_road(canvas,Vector2(210,200),Vector2(440,270),4)
-	_v17_map_district_label(canvas,"BAIRRO DO ABRIGO",Vector2(35,455),Color("#617a60")); _v17_map_district_label(canvas,"CENTRO",Vector2(375,120),Color("#a38755")); _v17_map_district_label(canvas,"ZONA INDUSTRIAL",Vector2(720,430),Color("#8b6551")); _v17_map_district_label(canvas,"PERIFERIA",Vector2(305,500),Color("#6b7956")); _v17_map_district_label(canvas,"QUARENTENA",Vector2(815,45),Color("#8d4540"))
-	_unlock_districts(); var counts:Dictionary={}
-	for name_v in CITY_LOCATIONS.keys():
-		var name:=str(name_v); var spec:Dictionary=CITY_LOCATIONS[name]; var district:=str(spec.get("district","BAIRRO DO ABRIGO")); if not bool(discovered_districts.get(district,false)): continue
-		var idx:=int(counts.get(district,0)); counts[district]=idx+1; var pos:=_v17_map_position(district,idx); canvas.add_child(_v17_map_pin(name,pos))
-	_v8_clear_actions(v8_page_actions); _v17_side_note("LEGENDA","VERDE  relativamente seguro\nDOURADO  risco conhecido\nVERMELHO  infestação, ninho ou boss\n\nRotas conhecidas ficam mais previsíveis. Clima, bloqueios e hordas ainda podem mudar a volta.",230)
-	_v17_side_button("MISSÕES",Callable(self,"_show_missions_panel")); _v17_side_button("PREVISÃO 3 DIAS",Callable(self,"_v15_show_forecast")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter"))
+    _v8_show_page("journal","MAPA DE CAMPO","NÃO É UMA LISTA DE FASES. É UMA CIDADE QUE VOCÊ PRECISA APRENDER.","",[])
+    _v9_set_immersive_page(true); v8_page_bg.texture=V8_STREET_TEX["CENTRO"]; v8_page_shade.color=Color(0.008,0.010,0.010,0.72)
+    v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
+    v8_page_body.visible=true; v8_page_body.position=Vector2(24,14); v8_page_body.size=Vector2(1060,64); v8_page_body.text="%s • %s • %d°C • vento %s %d km/h • pressão da infecção %d/100\nPôr do sol %s. Rotas aprendidas ficam mais previsíveis, mas nunca totalmente seguras."%[_v12_clock_text(),weather,temperature,wind_direction,wind_speed,mutation_pressure,_v12_format_minutes(sunset_minute)]
+    v8_page_cards.visible=false
+    for c in v8_page_info.get_children():
+        if str(c.name).begins_with("V17Map") or str(c.name).begins_with("V19Map"): c.queue_free()
+    var canvas:=Panel.new(); canvas.name="V19MapCanvas"; canvas.position=Vector2(22,88); canvas.size=Vector2(1075,563); canvas.add_theme_stylebox_override("panel",_flat(Color(0.018,0.020,0.018,0.98),Color("#837254"),8,2)); canvas.clip_contents=true; v8_page_info.add_child(canvas)
+    var art:=TextureRect.new(); art.name="V19MapArt"; art.position=Vector2(0,4); art.size=Vector2(1075,555); art.texture=V19_CITY_MAP_TEX; art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_SCALE; art.mouse_filter=Control.MOUSE_FILTER_IGNORE; canvas.add_child(art)
+    _unlock_districts(); var counts:Dictionary={}
+    for name_v in CITY_LOCATIONS.keys():
+        var name:=str(name_v); var spec:Dictionary=CITY_LOCATIONS[name]; var district:=str(spec.get("district","BAIRRO DO ABRIGO")); if not bool(discovered_districts.get(district,false)): continue
+        var idx:=int(counts.get(district,0)); counts[district]=idx+1; var pos:=_v17_map_position(district,idx); canvas.add_child(_v17_map_pin(name,pos))
+    _v8_clear_actions(v8_page_actions); _v17_side_note("ANOTAÇÕES","OBJETIVO ATUAL\n"+_v19_current_objective()+"\n\nVERDE  risco menor\nDOURADO  risco conhecido\nVERMELHO  infestação / boss\n\n"+_v19_tip(),290)
+    _v17_side_button("MISSÕES",Callable(self,"_show_missions_panel")); _v17_side_button("PREVISÃO 3 DIAS",Callable(self,"_v15_show_forecast")); _v17_side_button("MOCHILA",Callable(self,"_show_inventory_panel")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter"))
+    _v19_hint_once("map","DICA: escolha um lugar pelo que você precisa, não só pelo risco. Algumas descobertas abrem pesquisas e novas rotas.")
 
 func _v17_map_card(name:String) -> Button:
 	var spec:Dictionary=CITY_LOCATIONS[name]; var st:Dictionary=location_states.get(name,{})
@@ -2718,12 +2891,12 @@ func _v8_prepare_travel(name: String) -> void:
 	v8_page_close.text="VOLTAR AO MAPA"
 
 func _v8_start_travel(route: String) -> void:
-	v8_travel_route=route; v8_travel_segment=0; v8_travel_active=true; v8_travel_event=""
-	if not v8_travel_returning: expedition_distance_km=0.0
-	if not v8_travel_returning:
-		v13_expedition_start_day=day; v13_expedition_start_minute=_v12_clock_minutes(); v13_expedition_start_thirst=thirst; v13_expedition_start_fatigue=fatigue; v13_expedition_start_weight=_total_weight(); v13_attention_scans={}
-		actions_left=maxi(0,actions_left-1); _v7_prepare_travel()
-	_v8_render_street("Você deixa a segurança relativa do abrigo. A rua está molhada, silenciosa demais e cheia de lugares onde alguma coisa pode estar observando.",[["SEGUIR",Callable(self,"_v8_next_segment")],["VOLTAR",Callable(self,"_v8_abort_travel")]])
+    v8_travel_route=route; v8_travel_segment=0; v8_travel_active=true; v8_travel_event=""
+    if not v8_travel_returning: expedition_distance_km=0.0
+    if not v8_travel_returning:
+        v13_expedition_start_day=day; v13_expedition_start_minute=_v12_clock_minutes(); v13_expedition_start_thirst=thirst; v13_expedition_start_fatigue=fatigue; v13_expedition_start_weight=_total_weight(); v13_attention_scans={}
+        actions_left=maxi(0,actions_left-1); _v7_prepare_travel()
+    _v8_render_street("Você deixa a segurança relativa do abrigo. O som da porta fechando fica para trás. Agora cada minuto pertence à rua.\n\n[color=#b99a68][b]DICA DE SOBREVIVÊNCIA[/b][/color]\n"+_v19_tip(),[["SEGUIR",Callable(self,"_v8_next_segment")],["VOLTAR",Callable(self,"_v8_abort_travel")]])
 
 func _v8_street_district() -> String:
 	if v8_travel_destination=="ABRIGO": return str(CITY_LOCATIONS.get(v8_travel_origin,{}).get("district","BAIRRO DO ABRIGO"))
@@ -2985,17 +3158,17 @@ func _v8_observe_street() -> void:
 	else: _v8_render_street("Você espera e escuta. Nada se move além da chuva. O silêncio, pelo menos desta vez, era apenas silêncio.",[["CONTINUAR",Callable(self,"_v8_next_segment")]])
 
 func _v8_arrive() -> void:
-	if v8_travel_returning:
-		v8_travel_active=false; v8_travel_returning=false; _v18_homecoming_story_tick(); _v13_finish_return_trip(); return
-	var name:=v8_travel_destination; v8_travel_active=false; active_location=name
-	var first_visit:=not visited.has(name); visited[name]=int(visited.get(name,0))+1
-	if first_visit: _mission_progress("signal",1); _gain_xp(5)
-	var st:Dictionary=location_states[name]; if str(st.get("status",""))=="INEXPLORADO": st.status="VISITADO"; location_states[name]=st
-	var key:="%s|%s"%[v8_travel_origin,name]; v8_route_memory[key]=int(v8_route_memory.get(key,0))+1
-	_v18_gain_route_xp(name,v8_travel_route); v18_location_knowledge[name]=int(v18_location_knowledge.get(name,0))+1
-	var boss_name:=_boss_at_location(name)
-	if boss_name!="": _update_all(); _save_game(); _boss_encounter(boss_name,name); return
-	_update_all(); _save_game(); _show_location_rooms(name)
+    if v8_travel_returning:
+        v8_travel_active=false; v8_travel_returning=false; _v18_homecoming_story_tick(); _v13_finish_return_trip(); return
+    var name:=v8_travel_destination; v8_travel_active=false; active_location=name
+    var first_visit:=not visited.has(name); visited[name]=int(visited.get(name,0))+1
+    if first_visit: _mission_progress("signal",1); _gain_xp(5)
+    var st:Dictionary=location_states[name]; if str(st.get("status",""))=="INEXPLORADO": st.status="VISITADO"; location_states[name]=st
+    var key:="%s|%s"%[v8_travel_origin,name]; v8_route_memory[key]=int(v8_route_memory.get(key,0))+1
+    _v18_gain_route_xp(name,v8_travel_route); v18_location_knowledge[name]=int(v18_location_knowledge.get(name,0))+1
+    var boss_name:=_boss_at_location(name)
+    if boss_name!="": _update_all(); _save_game(); _boss_encounter(boss_name,name); return
+    _update_all(); _save_game(); _v19_show_arrival(name)
 
 func _v8_begin_return_trip() -> void:
 	if active_location=="": _show_shelter(); return
@@ -3020,16 +3193,16 @@ func _v8_show_location_screen(name: String) -> void:
 	_v17_side_button("ABRIR MOCHILA",Callable(self,"_show_inventory_panel")); _v17_side_button("VOLTAR PELAS RUAS",Callable(self,"_v8_begin_return_trip"))
 
 func _v17_room_card(location_name:String, room:String, searched:bool, cond:Dictionary, room_index:int) -> Button:
-	var b:=Button.new(); b.custom_minimum_size=Vector2(350,166); b.focus_mode=Control.FOCUS_NONE; b.text=""; b.disabled=searched
-	var danger:=int(cond.get("contamination",0)); var special_key:="%s|%s"%[location_name,room]; var special_unseen:=V18_SPECIAL_ROOMS.has(special_key) and not bool(v18_special_rooms_seen.get(special_key,false)); var edge:=Color("#806e55") if not searched else Color("#3e3a34"); if special_unseen: edge=GOLD; if danger>0: edge=RED_BRIGHT
-	b.add_theme_stylebox_override("normal",_flat(Color(0.021,0.019,0.017,0.94),edge,6,2)); b.add_theme_stylebox_override("hover",_flat(Color(0.11,0.072,0.045,0.98),Color("#c4a36d"),6,3))
-	var art:=TextureRect.new(); art.position=Vector2(7,7); art.size=Vector2(336,96); art.texture=_v17_room_texture(location_name,room_index); art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; art.modulate=Color(0.84,0.80,0.72,0.30 if searched else 0.90); art.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(art)
-	var shade:=ColorRect.new(); shade.position=Vector2(7,68); shade.size=Vector2(336,35); shade.color=Color(0,0,0,0.67); shade.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(shade)
-	var title:=Label.new(); title.position=Vector2(16,72); title.size=Vector2(315,27); title.text=room; title.add_theme_font_size_override("font_size",15); title.add_theme_color_override("font_color",BONE); title.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(title)
-	var tags:Array[String]=[]; if special_unseen: tags.append("PISTA / HISTÓRIA"); if bool(cond.get("locked",false)): tags.append("TRANCADO"); if bool(cond.get("dark",false)) and not bool(city_projects.get("power",false)): tags.append("ESCURO"); if danger>0: tags.append("CONTAMINADO"); if searched: tags=["VASCULHADO"]
-	var st:=Label.new(); st.position=Vector2(16,115); st.size=Vector2(315,36); st.text=" • ".join(tags) if not tags.is_empty() else "NÃO EXPLORADO  •  entrar"; st.add_theme_font_size_override("font_size",10); st.add_theme_color_override("font_color",Color("#857c70") if searched else edge.lightened(0.30)); st.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(st)
-	if not searched: b.pressed.connect(func(): _v9_enter_room(location_name,room))
-	return b
+    var b:=Button.new(); b.custom_minimum_size=Vector2(350,176); b.focus_mode=Control.FOCUS_NONE; b.text=""; b.disabled=searched
+    var danger:=int(cond.get("contamination",0)); var special_key:="%s|%s"%[location_name,room]; var special_unseen:=V18_SPECIAL_ROOMS.has(special_key) and not bool(v18_special_rooms_seen.get(special_key,false)); var edge:=Color("#806e55") if not searched else Color("#3e3a34"); if special_unseen: edge=GOLD; if danger>0: edge=RED_BRIGHT
+    b.add_theme_stylebox_override("normal",_flat(Color(0.021,0.019,0.017,0.94),edge,6,2)); b.add_theme_stylebox_override("hover",_flat(Color(0.11,0.072,0.045,0.98),Color("#c4a36d"),6,3))
+    var art:=TextureRect.new(); art.position=Vector2(7,7); art.size=Vector2(336,100); art.texture=_v17_room_texture(location_name,room_index); art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; art.modulate=Color(0.84,0.80,0.72,0.30 if searched else 0.90); art.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(art)
+    var shade:=ColorRect.new(); shade.position=Vector2(7,70); shade.size=Vector2(336,37); shade.color=Color(0,0,0,0.70); shade.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(shade)
+    var title:=Label.new(); title.position=Vector2(16,75); title.size=Vector2(315,27); title.text=room; title.add_theme_font_size_override("font_size",15); title.add_theme_color_override("font_color",BONE); title.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(title)
+    var tags:Array[String]=[]; if special_unseen: tags.append("PISTA / HISTÓRIA"); if bool(cond.get("locked",false)): tags.append("TRANCADO"); if bool(cond.get("dark",false)) and not bool(city_projects.get("power",false)): tags.append("ESCURO"); if danger>0: tags.append("CONTAMINADO"); if searched: tags=["VASCULHADO"]
+    var st:=Label.new(); st.position=Vector2(16,116); st.size=Vector2(315,47); st.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; st.text=" • ".join(tags) if not tags.is_empty() else _v19_room_hint(room); st.add_theme_font_size_override("font_size",10); st.add_theme_color_override("font_color",Color("#857c70") if searched else edge.lightened(0.30)); st.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(st)
+    if not searched: b.pressed.connect(func(): _v9_enter_room(location_name,room))
+    return b
 
 func _explore_location(name: String, risk: int, loot_hint: String) -> void:
 	# Compatibilidade com testes/rotas antigas.
@@ -3921,18 +4094,18 @@ func _v10_overlay_base(title_text:String,subtitle_text:String) -> Dictionary:
 	return {"panel":panel}
 
 func _v10_show_character_roster() -> void:
-	var ui:=_v10_overlay_base("ARQUIVO DE PERSONAGENS","Histórias, profissões e pessoas que podem cruzar sua campanha. Raridade indica a dificuldade de encontrar aquela experiência.")
-	var panel:Panel=ui.panel
-	var scroll:=ScrollContainer.new(); scroll.position=Vector2(30,128); scroll.size=Vector2(1398,625); panel.add_child(scroll)
-	var grid:=GridContainer.new(); grid.columns=4; grid.custom_minimum_size=Vector2(1365,0); grid.add_theme_constant_override("h_separation",12); grid.add_theme_constant_override("v_separation",12); scroll.add_child(grid)
-	for id in V10_CHARACTERS:
-		var c:Dictionary=V10_CHARACTERS[id]; var unlocked:=profile_unlocked_characters.has(id); var rarity:=str(c.rarity); var col:Color=V10_RARITY_COLORS.get(rarity,MUTED)
-		var card:=Button.new(); card.custom_minimum_size=Vector2(330,135); card.focus_mode=Control.FOCUS_NONE; card.text=""; card.add_theme_stylebox_override("normal",_flat(Color(0.045,0.04,0.034,0.98),col,6,2)); card.add_theme_stylebox_override("hover",_flat(Color(0.09,0.075,0.055,0.98),col.lightened(0.18),6,3)); grid.add_child(card)
-		var mark:=ColorRect.new(); mark.position=Vector2(0,0); mark.size=Vector2(7,135); mark.color=col; mark.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(mark)
-		var portrait:=TextureRect.new(); portrait.position=Vector2(16,16); portrait.size=Vector2(86,103); portrait.texture=_v12_portrait_texture(str(id)) if unlocked or id=="starter" else null; portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(portrait)
-		var name_l:=Label.new(); name_l.position=Vector2(114,12); name_l.size=Vector2(196,30); name_l.text=str(c.name) if unlocked or id=="starter" else "???"; name_l.add_theme_font_size_override("font_size",19); name_l.add_theme_color_override("font_color",BONE); name_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(name_l)
-		var info:=Label.new(); info.position=Vector2(114,43); info.size=Vector2(195,82); info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; info.text=("%s • %s\n%s"%[str(c.role),rarity,"DESCOBERTO — toque para ver o dossiê" if unlocked else str(c.unlock)]) if unlocked or id=="starter" else ("DESCONHECIDO • %s\n%s"%[rarity,str(c.unlock)]); info.add_theme_font_size_override("font_size",10); info.add_theme_color_override("font_color",MUTED); info.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(info)
-		card.pressed.connect(func(cid=id): _v10_inspect_character(str(cid)))
+    var ui:=_v10_overlay_base("ARQUIVO DE PERSONAGENS","Cada rosto pertence a alguém que pode mudar a campanha. Arraste para ver o arquivo completo.")
+    var panel:Panel=ui.panel
+    var scroll:=ScrollContainer.new(); scroll.position=Vector2(30,128); scroll.size=Vector2(1398,625); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; panel.add_child(scroll)
+    var grid:=GridContainer.new(); grid.columns=3; grid.custom_minimum_size=Vector2(1360,0); grid.add_theme_constant_override("h_separation",14); grid.add_theme_constant_override("v_separation",14); scroll.add_child(grid)
+    for id in V10_CHARACTERS:
+        var c:Dictionary=V10_CHARACTERS[id]; var unlocked:=profile_unlocked_characters.has(id) or id=="starter"; var rarity:=str(c.rarity); var col:Color=V10_RARITY_COLORS.get(rarity,MUTED)
+        var card:=Button.new(); card.custom_minimum_size=Vector2(442,184); card.focus_mode=Control.FOCUS_NONE; card.text=""; card.add_theme_stylebox_override("normal",_flat(Color(0.034,0.030,0.026,0.98),col,7,2)); card.add_theme_stylebox_override("hover",_flat(Color(0.09,0.075,0.055,0.98),col.lightened(0.18),7,3)); grid.add_child(card)
+        var portrait:=TextureRect.new(); portrait.position=Vector2(16,16); portrait.size=Vector2(126,150); portrait.texture=_v12_portrait_texture(str(id)); portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; portrait.modulate=Color(1,1,1,1 if unlocked else 0.38); portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(portrait)
+        var veil:=ColorRect.new(); veil.position=Vector2(16,16); veil.size=Vector2(126,150); veil.color=Color(0,0,0,0 if unlocked else 0.48); veil.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(veil)
+        var name_l:=Label.new(); name_l.position=Vector2(160,18); name_l.size=Vector2(260,32); name_l.text=str(c.name) if unlocked else "IDENTIDADE NÃO CONHECIDA"; name_l.add_theme_font_size_override("font_size",18); name_l.add_theme_color_override("font_color",BONE); name_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(name_l)
+        var info:=Label.new(); info.position=Vector2(160,55); info.size=Vector2(260,108); info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; info.text=("%s • %s\n\n%s"%[str(c.role),rarity,"Toque para abrir o dossiê."]) if unlocked else ("%s\n\n%s"%[rarity,str(c.unlock)]); info.add_theme_font_size_override("font_size",11); info.add_theme_color_override("font_color",MUTED); info.mouse_filter=Control.MOUSE_FILTER_IGNORE; card.add_child(info)
+        card.pressed.connect(func(cid=id): _v10_inspect_character(str(cid)))
 
 func _v10_inspect_character(id:String) -> void:
 	if not V10_CHARACTERS.has(id): return
@@ -4574,19 +4747,22 @@ func _v7_city_project(id: String) -> void:
 	_add_event("CIDADE","Projeto concluído: %s."%id.to_upper()); _save_game(); _show_infrastructure_panel()
 
 func _show_community_panel() -> void:
-	_v8_show_page("community","COMUNIDADE","PESSOAS REAIS. HISTÓRIAS REAIS. CONSEQUÊNCIAS REAIS.","",[])
-	_v9_set_immersive_page(true); v8_page_bg.texture=V8_SCREEN_TEX["community"]; v8_page_shade.color=Color(0.008,0.008,0.007,0.48)
-	v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
-	v8_page_body.visible=true; v8_page_body.position=Vector2(24,18); v8_page_body.size=Vector2(1060,82)
-	v8_page_body.text="[b]%d pessoa(s)[/b] • coesão %d • tensão %d • conforto %d\nParceiro(a): %s • crianças %d%s"%[survivor_count,community_cohesion,community_tension,shelter_comfort,partner_name if partner_name!="" else "—",children.size()," • [color=#c68b45]há suspeitas não resolvidas[/color]" if not community_clues.is_empty() else ""]
-	v8_page_cards.visible=true; v8_page_cards.columns=3; v8_page_cards.position=Vector2(24,108); v8_page_cards.size=Vector2(1065,535); v8_page_cards.add_theme_constant_override("h_separation",12); v8_page_cards.add_theme_constant_override("v_separation",12)
-	for c in v8_page_cards.get_children(): c.queue_free()
-	if survivors.is_empty(): v8_page_cards.add_child(_v17_text_card("VOCÊ AINDA ESTÁ SOZINHO","Pessoas são encontradas explorando, ouvindo o rádio e respondendo a situações do mundo.",Color("#675b4a"),Callable(self,"_show_map")))
-	else:
-		for i in range(survivors.size()):
-			if bool(survivors[i].get("alive",true)): v8_page_cards.add_child(_v17_survivor_card(i))
-	_v8_clear_actions(v8_page_actions); _v17_side_note("CONVIVÊNCIA",last_community_scene if last_community_scene!="" else "Salvar alguém é só o começo. Depois vocês precisam conseguir viver juntos.",170)
-	_v17_side_button("DOSSIÊ SELECIONADO",Callable(self,"_v10_show_survivor_dossier")); _v17_side_button("ROTINA / LAZER",Callable(self,"_v11_show_routine_panel")); _v17_side_button("TRABALHOS",Callable(self,"_v9_show_work_roster")); _v17_side_button("ENFERMARIA",Callable(self,"_v15_show_shelter_health")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter")); _mark_nav("community")
+    _v8_show_page("community","COMUNIDADE","PESSOAS, NÃO PLANILHAS.","",[])
+    _v9_set_immersive_page(true); v8_page_bg.texture=V8_SCREEN_TEX["community"]; v8_page_shade.color=Color(0.008,0.008,0.007,0.45)
+    v8_page_info.position=Vector2(30,120); v8_page_info.size=Vector2(1120,674); v8_page_side.position=Vector2(1170,120); v8_page_side.size=Vector2(440,674)
+    v8_page_cards.visible=false; v8_page_body.visible=true; v8_page_body.position=Vector2(24,18); v8_page_body.size=Vector2(1060,72)
+    v8_page_body.text="[b]%d pessoa(s)[/b] • coesão %d • tensão %d • conforto %d\nParceiro(a): %s • crianças %d%s"%[survivor_count,community_cohesion,community_tension,shelter_comfort,partner_name if partner_name!="" else "—",children.size()," • [color=#c68b45]há suspeitas não resolvidas[/color]" if not community_clues.is_empty() else ""]
+    _v19_clear_named(v8_page_info,"V19Community")
+    var scroll:=ScrollContainer.new(); scroll.name="V19CommunityScroll"; scroll.position=Vector2(20,100); scroll.size=Vector2(1080,548); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; v8_page_info.add_child(scroll)
+    var grid:=GridContainer.new(); grid.name="V19CommunityGrid"; grid.columns=2; grid.custom_minimum_size=Vector2(1044,0); grid.add_theme_constant_override("h_separation",14); grid.add_theme_constant_override("v_separation",14); scroll.add_child(grid)
+    if survivors.is_empty():
+        grid.add_child(_v17_text_card("VOCÊ AINDA ESTÁ SOZINHO","Pessoas são encontradas explorando, ouvindo o rádio e respondendo a situações do mundo.",Color("#675b4a"),Callable(self,"_show_map")))
+    else:
+        for i in range(survivors.size()):
+            if bool(survivors[i].get("alive",true)): grid.add_child(_v17_survivor_card(i))
+    _v8_clear_actions(v8_page_actions); _v17_side_note("CONVIVÊNCIA",last_community_scene if last_community_scene!="" else "Salvar alguém é só o começo. Ferimentos, confiança, ciúmes e decisões continuam depois que a porta do abrigo fecha.",190)
+    _v17_side_button("DOSSIÊ SELECIONADO",Callable(self,"_v10_show_survivor_dossier")); _v17_side_button("ROTINA / LAZER",Callable(self,"_v11_show_routine_panel")); _v17_side_button("TRABALHOS",Callable(self,"_v9_show_work_roster")); _v17_side_button("ENFERMARIA",Callable(self,"_v15_show_shelter_health")); _v17_side_button("VOLTAR AO ABRIGO",Callable(self,"_show_shelter")); _mark_nav("community")
+    _v19_hint_once("community_scroll","DICA: arraste a lista de pessoas. Retratos, estado e função ajudam a ler a comunidade de relance.")
 
 func _v13_runtime_png(path:String) -> Texture2D:
 	if ResourceLoader.exists(path): return load(path) as Texture2D
@@ -6480,7 +6656,7 @@ func _v18_resolve_special_room(location_name:String,room_name:String,choice:Stri
 			wildlife_density=mini(100,wildlife_density+4); _add_event("CAÇA","Rotas de animais e pontos de água foram adicionados ao mapa.")
 		"finale":
 			mutation_pressure=mini(100,mutation_pressure+4); research_points+=3
-	v18_special_rooms_seen[key]=true; v18_story_flags[chain]=true if chain!="" else true; _v18_apply_chain_outcome(chain); _v18_chain_followup(chain); _v18_mark_chain_progress(location_name,room_name); _add_event(location_name,"Descoberta em %s: %s"%[room_name,str(meta.get("title","pista"))]); _save_game(); _search_room(location_name,room_name)
+	v18_special_rooms_seen[key]=true; v18_story_flags[chain]=true if chain!="" else true; _v18_apply_chain_outcome(chain); _v18_chain_followup(chain); _v18_mark_chain_progress(location_name,room_name); _v19_unlock_blueprint_from_discovery(location_name,room_name,chain); _add_event(location_name,"Descoberta em %s: %s"%[room_name,str(meta.get("title","pista"))]); _save_game(); _search_room(location_name,room_name)
 
 func _v18_apply_chain_outcome(chain:String) -> void:
 	# End-of-chain discoveries change the campaign instead of becoming disposable flavor text.
@@ -6857,15 +7033,17 @@ func _v17_prod_card(title_text:String,body_text:String,tex:Texture2D,col:Color,c
 	var a:=Label.new(); a.position=Vector2(128,129); a.size=Vector2(350,20); a.text="ABRIR  →"; a.add_theme_font_size_override("font_size",11); a.add_theme_color_override("font_color",col.lightened(0.30)); a.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(a); b.pressed.connect(cb); return b
 
 func _v17_survivor_card(index:int) -> Button:
-	var p:Dictionary=survivors[index]; _v7_normalize_survivor(p); var meta:=_v10_character_by_name(str(p.get("name",""))); var cid:=str(meta.get("id",p.get("character_id","starter"))); if cid=="": cid="starter"
-	var rarity:=str(p.get("rarity","COMUM")); var col:Color=V10_RARITY_COLORS.get(rarity,MUTED); var task:=str(survivor_tasks.get(str(p.get("name","?")),"SEM FUNÇÃO"))
-	var b:=Button.new(); b.custom_minimum_size=Vector2(340,238); b.focus_mode=Control.FOCUS_NONE; b.text=""; b.add_theme_stylebox_override("normal",_flat(Color(0.025,0.023,0.020,0.95),col,7,2)); b.add_theme_stylebox_override("hover",_flat(Color(0.075,0.055,0.040,0.98),col.lightened(0.18),7,3))
-	var portrait:=TextureRect.new(); portrait.position=Vector2(15,16); portrait.size=Vector2(112,158); portrait.texture=_v12_portrait_texture(cid); portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(portrait)
-	var t:=Label.new(); t.position=Vector2(145,18); t.size=Vector2(175,32); t.text=str(p.get("name","?")); t.add_theme_font_size_override("font_size",22); t.add_theme_color_override("font_color",BONE); t.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(t)
-	var r:=Label.new(); r.position=Vector2(145,54); r.size=Vector2(175,46); r.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; r.text="%s\n%s"%[str(p.get("role","CIVIL")),rarity]; r.add_theme_font_size_override("font_size",11); r.add_theme_color_override("font_color",col.lightened(0.25)); r.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(r)
-	var st:=Label.new(); st.position=Vector2(145,110); st.size=Vector2(175,78); st.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; st.text="%s\n%s"%[_v7_social_read(p),task]; st.add_theme_font_size_override("font_size",11); st.add_theme_color_override("font_color",MUTED); st.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(st)
-	var illness:=str(p.get("illness","")); var footer:=Label.new(); footer.position=Vector2(15,192); footer.size=Vector2(305,30); footer.text="SAUDÁVEL" if illness=="" else illness; footer.add_theme_font_size_override("font_size",11); footer.add_theme_color_override("font_color",Color("#5c9a69") if illness=="" else Color("#bb6458")); footer.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(footer)
-	b.pressed.connect(func(): selected_survivor_index=index; _v10_show_survivor_dossier()); return b
+    var p:Dictionary=survivors[index]; _v7_normalize_survivor(p)
+    var meta:=_v10_character_by_name(str(p.get("name",""))); var cid:=str(meta.get("id","starter")); if cid=="": cid="starter"
+    var rarity:=str(p.get("rarity","COMUM")); var col:Color=V10_RARITY_COLORS.get(rarity,MUTED); var task:=str(survivor_tasks.get(str(p.name),"SEM FUNÇÃO"))
+    var b:=Button.new(); b.custom_minimum_size=Vector2(510,190); b.focus_mode=Control.FOCUS_NONE; b.text=""; b.add_theme_stylebox_override("normal",_flat(Color(0.024,0.022,0.019,0.96),col,6,2)); b.add_theme_stylebox_override("hover",_flat(Color(0.075,0.06,0.045,0.98),col.lightened(0.18),6,3))
+    var strip:=ColorRect.new(); strip.position=Vector2(0,0); strip.size=Vector2(8,190); strip.color=col; strip.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(strip)
+    var portrait:=TextureRect.new(); portrait.position=Vector2(18,15); portrait.size=Vector2(128,158); portrait.texture=_v12_portrait_texture(cid); portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(portrait)
+    var name_l:=Label.new(); name_l.position=Vector2(165,16); name_l.size=Vector2(315,34); name_l.text=str(p.name); name_l.add_theme_font_size_override("font_size",22); name_l.add_theme_color_override("font_color",BONE); name_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(name_l)
+    var role_l:=Label.new(); role_l.position=Vector2(165,52); role_l.size=Vector2(315,28); role_l.text="%s • %s"%[str(p.role),rarity]; role_l.add_theme_font_size_override("font_size",12); role_l.add_theme_color_override("font_color",col.lightened(0.22)); role_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(role_l)
+    var status_l:=Label.new(); status_l.position=Vector2(165,88); status_l.size=Vector2(315,76); status_l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; status_l.text="%s\nFUNÇÃO: %s\nConfiança %d • estresse %d"%[_v7_social_read(p),task,int(p.get("trust",0)),int(p.get("stress",0))]; status_l.add_theme_font_size_override("font_size",11); status_l.add_theme_color_override("font_color",MUTED); status_l.mouse_filter=Control.MOUSE_FILTER_IGNORE; b.add_child(status_l)
+    b.pressed.connect(func(): selected_survivor_index=index; _v10_show_survivor_dossier())
+    return b
 
 func _v17_journal_card(title_text:String,body_text:String) -> Panel:
 	var p:=Panel.new(); p.custom_minimum_size=Vector2(510,128); p.add_theme_stylebox_override("panel",_flat(Color(0.72,0.66,0.54,0.93),Color("#4a4034"),5,2))

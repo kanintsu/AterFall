@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1075" height="555" viewBox="0 0 1075 555">
+  <defs>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="13"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="table" tableValues="0 .10"/></feComponentTransfer>
+    </filter>
+    <filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity=".65"/></filter>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#6d6556" stroke-width=".7" opacity=".16"/>
+    </pattern>
+  </defs>
+  <rect width="1075" height="555" fill="#171a18"/>
+  <rect x="12" y="12" width="1051" height="531" rx="8" fill="#252721" stroke="#7b6b50" stroke-width="3"/>
+  <rect x="12" y="12" width="1051" height="531" rx="8" fill="url(#grid)"/>
+  <path d="M-20 490 C150 395 270 440 397 330 S650 180 810 233 S965 315 1100 198" fill="none" stroke="#32464a" stroke-width="48" opacity=".82"/>
+  <path d="M-20 490 C150 395 270 440 397 330 S650 180 810 233 S965 315 1100 198" fill="none" stroke="#6b8585" stroke-width="2" opacity=".48"/>
+  <g fill="#34372f" stroke="#565948" stroke-width="1.5" opacity=".95">
+    <path d="M48 333h235v168H48z"/><path d="M307 265h250v225H307z"/>
+    <path d="M568 326h270v177H568z"/><path d="M790 54h225v196H790z"/>
+    <path d="M115 72h256v165H115z"/><path d="M390 55h335v174H390z"/>
+  </g>
+  <g stroke="#a79a7b" stroke-width="12" fill="none" opacity=".55">
+    <path d="M72 423L431 305L792 372L928 150"/>
+    <path d="M219 162L431 305L480 465"/>
+    <path d="M431 305L682 147L928 150"/>
+    <path d="M480 465L792 372"/>
+  </g>
+  <g stroke="#20231f" stroke-width="4" fill="none" opacity=".95">
+    <path d="M72 423L431 305L792 372L928 150"/>
+    <path d="M219 162L431 305L480 465"/>
+    <path d="M431 305L682 147L928 150"/>
+    <path d="M480 465L792 372"/>
+  </g>
+  <g fill="#1d1f1c" stroke="#62604f" stroke-width="1">
+    <g transform="translate(75 350)">
+      <rect width="54" height="36"/><rect x="68" y="-18" width="44" height="52"/><rect x="126" y="8" width="66" height="35"/>
+      <rect x="18" y="55" width="70" height="42"/><rect x="105" y="59" width="46" height="36"/><rect x="165" y="52" width="62" height="45"/>
+    </g>
+    <g transform="translate(337 290)">
+      <rect width="48" height="66"/><rect x="62" y="-15" width="72" height="48"/><rect x="150" y="-3" width="58" height="58"/>
+      <rect x="15" y="82" width="85" height="48"/><rect x="118" y="73" width="54" height="72"/><rect x="186" y="75" width="48" height="54"/>
+    </g>
+    <g transform="translate(610 360)">
+      <rect width="80" height="45"/><rect x="95" y="-18" width="64" height="60"/><rect x="177" y="4" width="56" height="48"/>
+      <rect x="30" y="72" width="74" height="48"/><rect x="121" y="68" width="90" height="51"/>
+    </g>
+    <g transform="translate(827 84)">
+      <rect width="62" height="54"/><rect x="80" y="7" width="77" height="48"/><rect x="18" y="75" width="84" height="58"/>
+      <rect x="119" y="74" width="64" height="61"/>
+    </g>
+  </g>
+  <g font-family="sans-serif" letter-spacing="3" font-weight="700">
+    <text x="60" y="325" fill="#8fa38b" font-size="15">ABRIGO / RESIDENCIAL</text>
+    <text x="344" y="252" fill="#c1a16d" font-size="16">CENTRO</text>
+    <text x="601" y="318" fill="#b47c62" font-size="15">ZONA INDUSTRIAL</text>
+    <text x="816" y="44" fill="#b75650" font-size="15">QUARENTENA</text>
+    <text x="115" y="62" fill="#869473" font-size="15">PERIFERIA</text>
+  </g>
+  <g opacity=".75">
+    <circle cx="91" cy="421" r="8" fill="#9fb18e"/><circle cx="431" cy="305" r="8" fill="#c5a16a"/>
+    <circle cx="792" cy="372" r="8" fill="#b97860"/><circle cx="928" cy="150" r="8" fill="#b8423d"/>
+  </g>
+  <path d="M18 18H1057V537H18z" fill="none" stroke="#b9a376" stroke-width="1" opacity=".36"/>
+  <rect width="1075" height="555" filter="url(#noise)" opacity=".7"/>
+  <text x="824" y="522" fill="#8a806d" font-family="monospace" font-size="12">MAPA DE CAMPO • NÃO CONFIAR EM ROTAS ANTIGAS</text>
+</svg>
