@@ -34,40 +34,82 @@ jobs:
           path = Path(os.environ["MAIN"])
           lines = path.read_text(encoding="utf-8").splitlines()
 
-          needle = 'inventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
+          def indent_of(line: str) -> str:
+              return line[:len(line) - len(line.lstrip(" \t"))]
 
-          matches = [i for i, line in enumerate(lines) if needle in line]
-          if len(matches) != 1:
-              raise SystemExit(f"Expected exactly one medical-room line, found {len(matches)}")
+          # 1) Medical-room same-line if/else. Idempotent after first repair.
+          medical = 'inventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
+          matches = [i for i, line in enumerate(lines) if medical in line]
+          if len(matches) > 1:
+              raise SystemExit(f"Unexpected duplicate medical-room line: {len(matches)}")
+          if len(matches) == 1:
+              i = matches[0]
+              ind = indent_of(lines[i])
+              child = ind + "\t"
+              lines[i:i+1] = [
+                  ind + "inventory.bandage+=1",
+                  ind + "if careful:",
+                  child + "inventory.med+=1",
+                  ind + "else:",
+                  child + "stress=mini(100,stress+2)",
+                  ind + '_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")',
+              ]
+              print("Patched medical-room if/else")
 
-          i = matches[0]
-          line = lines[i]
-          indent = line[:len(line) - len(line.lstrip(" \t"))]
-          child = indent + "\t"
-
-          replacement = [
-              indent + "inventory.bandage+=1",
-              indent + "if careful:",
-              child + "inventory.med+=1",
-              indent + "else:",
-              child + "stress=mini(100,stress+2)",
-              indent + '_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")',
+          # 2) Explicit types for tactical firearm range calculation.
+          combat_matches = [i for i, line in enumerate(lines) if 'var range_penalty:=[-6,0,8,16]' in line]
+          if len(combat_matches) != 1:
+              raise SystemExit(f"Expected one range_penalty line, found {len(combat_matches)}")
+          i = combat_matches[0]
+          ind = indent_of(lines[i])
+          lines[i:i+1] = [
+              ind + 'var range_penalty:int = int([-6,0,8,16][clampi(v18_combat_range,0,3)])',
+              ind + 'var hit_chance:int = 72+combat_training*5+v18_aim_bonus-range_penalty-int(fatigue/8)-int(_v13_condition_penalty("combat")/2)',
+              ind + 'hit_chance=clampi(hit_chance,18,96)',
           ]
-          lines[i:i+1] = replacement
+          print("Patched combat type inference")
+
+          # 3) Keep route QA variables outside the for-loop scope.
+          route_matches = [i for i, line in enumerate(lines) if 'v18_route_experience={}; var before:=_v12_travel_estimate("HOSPITAL","BECOS")' in line]
+          if len(route_matches) != 1:
+              raise SystemExit(f"Expected one route QA line, found {len(route_matches)}")
+          i = route_matches[0]
+          ind = indent_of(lines[i])
+          child = ind + "\t"
+          lines[i:i+1] = [
+              ind + 'v18_route_experience={}',
+              ind + 'var before:Dictionary = _v12_travel_estimate("HOSPITAL","BECOS")',
+              ind + 'for i in range(5):',
+              child + '_v18_gain_route_xp("HOSPITAL","BECOS")',
+              ind + 'var route_after:Dictionary = _v12_travel_estimate("HOSPITAL","BECOS")',
+              ind + 'if int(route_after.minutes)>=int(before.minutes):',
+              child + 'failures.append("route_learning")',
+          ]
+          print("Patched route QA scope")
+
+          # Update final QA print to use the new scoped name.
+          print_matches = [i for i, line in enumerate(lines) if 'route_before=%d route_after=%d' in line and 'int(after.minutes)' in line]
+          if len(print_matches) != 1:
+              raise SystemExit(f"Expected one V18 QA print line, found {len(print_matches)}")
+          i = print_matches[0]
+          lines[i] = lines[i].replace('int(after.minutes)', 'int(route_after.minutes)')
+          print("Patched V18 QA print")
 
           leftovers = [(n + 1, line) for n, line in enumerate(lines) if "; else:" in line]
-          print("Remaining '; else:' patterns:", len(leftovers))
-          for item in leftovers[:20]:
-              print(item)
           if leftovers:
-              raise SystemExit("Other same-line else patterns remain; inspect before build.")
+              print("Remaining same-line else patterns:")
+              for item in leftovers[:20]:
+                  print(item)
+              raise SystemExit("Other same-line else patterns remain.")
 
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("Patched", path)
           PY
 
-          echo "Corrected area:"
-          nl -ba "$MAIN" | sed -n '6445,6468p'
+          echo "Combat area after repair:"
+          nl -ba "$MAIN" | sed -n '1104,1122p'
+          echo "V18 QA area after repair:"
+          nl -ba "$MAIN" | sed -n '6738,6762p'
 
           rm -f "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
           (
@@ -84,5 +126,5 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add AfterfallBuriedV18-Project.zip
           git diff --cached --quiet && exit 0
-          git commit -m "Fix V18 GDScript medical-room syntax"
+          git commit -m "Fix remaining V18 GDScript parse errors"
           git push origin HEAD:main
