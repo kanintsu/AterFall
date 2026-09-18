@@ -1,0 +1,28 @@
+name: Inspect Afterfall Main GDScript
+
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-afterfall-main.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract and print failing area
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/afterfall
+          mkdir -p /tmp/afterfall
+          unzip -q AfterfallBuriedV18-Project.zip -d /tmp/afterfall
+          MAIN="$(find /tmp/afterfall -type f -path '*/scripts/main.gd' -print -quit)"
+          test -n "$MAIN"
+          echo "MAIN=$MAIN"
+          echo "---- lines 6425-6475 ----"
+          nl -ba "$MAIN" | sed -n '6425,6475p'
