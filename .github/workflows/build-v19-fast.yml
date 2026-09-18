@@ -53,7 +53,7 @@ jobs:
         run: |
           set -o pipefail
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
-          timeout 45s "$GODOT" --headless --path game -- --capture_map 2>&1 | tee map.log
+          timeout 60s xvfb-run -a "$GODOT" --path game --rendering-method gl_compatibility -- --capture_map 2>&1 | tee map.log
           test -s game/capture_map.png
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid access|Invalid call" map.log
       - name: Smoke render inventory
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -o pipefail
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
-          timeout 45s "$GODOT" --headless --path game -- --capture_v14inventory 2>&1 | tee inventory.log
+          timeout 60s xvfb-run -a "$GODOT" --path game --rendering-method gl_compatibility -- --capture_v14inventory 2>&1 | tee inventory.log
           test -s game/capture_v14inventory.png
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid access|Invalid call" inventory.log
       - name: Smoke render location
@@ -69,7 +69,7 @@ jobs:
         run: |
           set -o pipefail
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
-          timeout 45s "$GODOT" --headless --path game -- --capture_v17location 2>&1 | tee location.log
+          timeout 60s xvfb-run -a "$GODOT" --path game --rendering-method gl_compatibility -- --capture_v17location 2>&1 | tee location.log
           test -s game/capture_v17location.png
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid access|Invalid call" location.log
       - name: Export APK
@@ -104,3 +104,5 @@ jobs:
 # rerun-after-indentation-fix
 
 # rerun-after-character-type-fix
+
+# use-xvfb-for-real-render-smoke
