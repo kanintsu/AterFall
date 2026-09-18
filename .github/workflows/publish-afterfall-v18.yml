@@ -1,0 +1,52 @@
+name: Publish Afterfall V18 APK
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-afterfall-v18.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download final tested APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh api             -H "Accept: application/vnd.github+json"             /repos/${GITHUB_REPOSITORY}/actions/artifacts/10561069289/zip             > /tmp/afterfall-artifact.zip
+          mkdir -p /tmp/afterfall-release
+          unzip -q /tmp/afterfall-artifact.zip -d /tmp/afterfall-release
+          find /tmp/afterfall-release -maxdepth 3 -type f -print
+          APK="$(find /tmp/afterfall-release -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          cp "$APK" Afterfall-Buried-Days-V18.apk
+
+          SHA_FILE="$(find /tmp/afterfall-release -type f -name '*.sha256' -print -quit || true)"
+          if [ -n "$SHA_FILE" ]; then
+            cp "$SHA_FILE" Afterfall-Buried-Days-V18.apk.sha256
+          else
+            sha256sum Afterfall-Buried-Days-V18.apk > Afterfall-Buried-Days-V18.apk.sha256
+          fi
+
+          test -s Afterfall-Buried-Days-V18.apk
+          ls -lh Afterfall-Buried-Days-V18.apk
+          cat Afterfall-Buried-Days-V18.apk.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh release view v18-test >/dev/null 2>&1 &&             gh release delete v18-test --yes --cleanup-tag || true
+
+          gh release create v18-test             Afterfall-Buried-Days-V18.apk             Afterfall-Buried-Days-V18.apk.sha256             --title "AFTERFALL: Buried Days — V18 Test Build"             --notes "Build Android de teste da V18. Gerada com Godot 4.7.2 após QA V18 e regressão geral aprovados. APK debug assinado para instalação e testes no Android."
