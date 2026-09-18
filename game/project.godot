@@ -1,0 +1,26 @@
+config_version=5
+
+[application]
+config/name="Afterfall: Buried Days V18"
+run/main_scene="res://Main.tscn"
+config/icon="res://assets/app_icon.png"
+boot_splash/image="res://assets/boot_splash.png"
+boot_splash/bg_color=Color(0.025, 0.025, 0.022, 1)
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1648
+window/size/viewport_height=920
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+window/handheld/orientation=0
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true

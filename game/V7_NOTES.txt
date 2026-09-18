@@ -1,0 +1,40 @@
+AFTERFALL: BURIED DAYS — V7
+
+Esta build é a primeira integração ampla dos sistemas de sobrevivência planejados.
+
+SISTEMAS FUNCIONAIS NESTA BUILD
+- Novo jogo isolado da V6 e reset real da campanha.
+- 12 locais / 4 distritos / 36 áreas internas persistentes.
+- Cidade viva: saqueado, infestado, ninho, boss, bloqueio e evolução da mutação.
+- Combate por turnos, mutações e bosses.
+- Corpo: peso, gordura estimada, energia, força, condicionamento, dor muscular, estresse, higiene e ferimentos localizados.
+- Nutrição/calorias e efeito diário de déficit/excesso no corpo.
+- Exercício de força e cardio.
+- 13 habilidades: sobrevivência, caça, carpintaria, forja, elétrica, eletrônica, mecânica, medicina, culinária, agricultura, costura, armeiro e química.
+- 13 livros/manuais que liberam conhecimento e receitas; prática dá XP.
+- 21 receitas de crafting com habilidade, estação e materiais.
+- Materiais separados: madeira, aço, cobre, fio, pregos, couro, químicos, sementes, carvão, peças etc.
+- Itens especiais com raridade e condição/durabilidade.
+- Caça, pesca e armadilhas com densidade de fauna.
+- Horta, crescimento e colheita.
+- Criação de galinhas, coelhos, cabras e cachorro; alimento/água/saúde/produção.
+- Veículos: bicicleta, moto e carro; condição, combustível, reparo e seleção.
+- Infraestrutura: energia, água, antena e quarteirão seguro.
+- Comunidade: confiança, lealdade, inveja, estresse, afinidade, segredos, espionagem e crise de traição.
+- Romance do protagonista, casais entre NPCs, gravidez e nascimento em campanhas longas.
+- Facções iniciais e reputação persistente.
+- Notícias do mundo, estações/temperatura e Arquivo do Colapso.
+- Save/load V7 para todos esses sistemas.
+
+QA REALIZADO
+- V7_QA_OK: corpo, livro, crafting, caça/animais, mundo/comunidade e save/load.
+- QA_NEW_GAME_RESET_PASS.
+- QA_ROOM_STATE_PASS: 36 áreas / 12 cartões de mapa.
+- QA_COMBAT_PASS.
+- QA_CLICKABILITY_PASS: 62 controles conectados.
+- QA_SAVE_LOAD_PASS version=7.
+- Campanha simulada até Dia 26 / mutação estágio 4 sem quebrar.
+- APK verificado por unzip e apksigner v2/v3.
+
+IMPORTANTE
+Nem toda ideia de longo prazo está em profundidade final de conteúdo. A V7 implementa a primeira versão funcional e persistente das linhas principais; sistemas como múltiplas cidades completas, gerações adultas, facções com campanhas inteiras e centenas de itens ainda precisam ser expandidos com conteúdo, arte e balanceamento em versões seguintes.

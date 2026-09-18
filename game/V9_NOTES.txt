@@ -1,0 +1,21 @@
+AFTERFALL: BURIED DAYS V9 — DEEP SURVIVAL / INTERIOR SIMULATION
+
+Current milestone (not final release):
+- 24 city locations / 147 persistent interior areas retained from V8.
+- Interior rooms now have persistent conditions: locked, dark, contaminated, forced, event resolved.
+- Locked areas require key/card, force, tools or mechanics; forcing creates noise/injury risk.
+- Dark rooms can consume flashlight batteries or be entered blind with higher danger.
+- Contaminated rooms can increase infection/stress.
+- Interior events: suspicious noises, trapped caches, documents/lore, survivors, live alarm wiring.
+- Specific food items: calories, protein, hydration, rarity, condition and spoilage.
+- Food poisoning and day-by-day deterioration.
+- Global world events now alter water safety, regional power, refugee pressure, mutation pressure and radio signal.
+- Survivors can be assigned to Guard, Farm, Workshop, Hunting, Infirmary or Radio.
+- Profession, loyalty and stress affect daily productivity.
+- Spies assigned to Radio/Guard can leak information and leave clues.
+- Envy/low loyalty can cause stolen supplies and social crises.
+- V9 save is isolated (afterfall_save_v9.json).
+- Existing V7/V8 survival, travel, combat, boss and city systems retained.
+
+QA: V9 + V8 + V7 + campaign + all-controls suites pass after integration.
+Visual QA: pantry changed to item cards; immersive interior pages hide dashboard navigation.

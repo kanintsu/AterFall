@@ -1,0 +1,26 @@
+AFTERFALL: BURIED DAYS — V6
+
+Principais sistemas desta versão:
+- Novo Jogo zera a campanha e começa sem recursos úteis.
+- Primeiro objetivo: vasculhar o abrigo.
+- 12 locais em 4 distritos e 36 áreas internas persistentes.
+- Estados da cidade: inexplorado, visitado, vasculhado, saqueado, infestado e ninho.
+- Cidade evolui com os dias e a pressão da infecção.
+- Mutações em quatro estágios, com comportamentos diferentes.
+- Combate por turnos: corpo a corpo, tiro, cura e fuga.
+- Três bosses de progressão: O Uivador, O Açougueiro e A Matriarca.
+- Progressão do sobrevivente, XP, treinamento e pesquisa da infecção.
+- Sobreviventes com funções e eventos/missões.
+- Eventos de rádio e escolhas com consequências.
+- Missões de ninhos, resgates, investigação e campanha.
+- Save V6 com mundo, salas, inventário, missões, bosses e sobreviventes persistentes.
+
+QA executado no Godot 4.7.2:
+- reset de Novo Jogo: PASS
+- 36 salas / 12 locais: PASS
+- combate e boss: PASS
+- 59 controles conectados: PASS
+- save/load: PASS
+- campanha simulada até Dia 26 / mutação estágio 4: PASS
+
+Build Android: ARM64, debug signed, APK Signature Scheme v2/v3.

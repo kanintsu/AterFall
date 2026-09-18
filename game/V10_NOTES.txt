@@ -1,0 +1,8 @@
+AFTERFALL V10 — MENU E PERSONAGENS
+• Menu principal refeito com dossiê do sobrevivente.
+• Novo jogador começa com CIVIL COMUM, sem profissão especial.
+• Arquivo com 13 personagens, raridades, profissões e histórias.
+• Personagens recrutados desbloqueiam seus dossiês no perfil.
+• Configurações com sliders reais de volume geral, ambiente, rádio e efeitos.
+• Perfil/configurações persistem fora do save da campanha.
+• Save V10 separado.

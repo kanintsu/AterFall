@@ -1,0 +1,14 @@
+AFTERFALL: BURIED DAYS V8 — CORE RESTRUCTURE
+
+Focus: make it feel like a game, not one dashboard.
+- Dedicated activity screens for inventory, body, skills, books, crafting, production, community, radio/world and journal.
+- Urban travel layer: shelter -> streets -> events -> destination -> interior rooms -> streets -> shelter.
+- Three route styles: avenue, alleys and silent route, with different time/risk/fatigue profiles.
+- Street events with actual consequences: lone infected, abandoned car, distress voice, suspicious backpack, blood trail, armed observer, mutant and horde.
+- Stealth uses body state, fatigue, weight, weather, route and survival skill.
+- 24 city locations across 5 districts.
+- 145 internal areas/rooms, persistent per campaign.
+- Expanded residential, downtown, industrial, outskirts/rural and quarantine content.
+- Existing V7 systemic survival remains underneath.
+
+This is a major architecture milestone, not a claim that every long-term content idea is finished.

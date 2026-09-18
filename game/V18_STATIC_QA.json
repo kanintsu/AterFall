@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "functions": 528,
+  "unique_functions": 528,
+  "preloads": 103,
+  "city_locations": 24,
+  "v18_special_rooms": 29,
+  "errors": [],
+  "warnings": []
+}
