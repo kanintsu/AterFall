@@ -50,7 +50,7 @@ jobs:
         run: |
           set -o pipefail
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
-          timeout 240s "$GODOT" --headless --editor --path project --quit-after 10 2>&1 | tee qa-import.log
+          timeout 300s "$GODOT" --headless --editor --path project --import 2>&1 | tee qa-import.log
           if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Failed to load script|Cannot open file" qa-import.log; then
             exit 3
           fi
