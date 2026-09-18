@@ -1,0 +1,78 @@
+name: Repair Afterfall V18 Syntax
+
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-afterfall-v18.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repair main.gd inside V18 archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/afterfall-repair
+          mkdir -p /tmp/afterfall-repair
+          unzip -q AfterfallBuriedV18-Project.zip -d /tmp/afterfall-repair
+
+          MAIN="$(find /tmp/afterfall-repair -type f -path '*/scripts/main.gd' -print -quit)"
+          test -n "$MAIN"
+
+          export MAIN
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["MAIN"])
+          text = path.read_text(encoding="utf-8")
+
+          old = '\t\t\t\tinventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
+          new = '''\t\t\t\tinventory.bandage+=1
+          \t\t\t\tif careful:
+          \t\t\t\t\tinventory.med+=1
+          \t\t\t\telse:
+          \t\t\t\t\tstress=mini(100,stress+2)
+          \t\t\t\t_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'''
+
+          if old not in text:
+              raise SystemExit("Expected V18 medical-room syntax was not found; refusing blind edit.")
+
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          leftovers = [(i + 1, line) for i, line in enumerate(text.splitlines()) if "; else:" in line]
+          print("Remaining '; else:' patterns:", len(leftovers))
+          for item in leftovers[:20]:
+              print(item)
+          if leftovers:
+              raise SystemExit("Other same-line else patterns remain; inspect before build.")
+          PY
+
+          echo "Corrected area:"
+          nl -ba "$MAIN" | sed -n '6445,6465p'
+
+          rm -f "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
+          (
+            cd /tmp/afterfall-repair
+            zip -qr "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip" .
+          )
+          test -s "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
+
+      - name: Commit repaired project archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "Afterfall Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add AfterfallBuriedV18-Project.zip
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix V18 GDScript medical-room syntax"
+          git push origin HEAD:main
