@@ -1,0 +1,141 @@
+name: Build Afterfall Android APK
+
+on:
+  push:
+    paths:
+      - 'AfterfallBuriedV18-Project.zip'
+      - '.github/workflows/build-afterfall-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 5             -o /tmp/godot.zip             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Install Godot Android templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 5             -o /tmp/templates.tpz             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          rm -rf /tmp/godot_templates
+          mkdir -p /tmp/godot_templates
+          unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          cp -a /tmp/godot_templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+          test -f "$HOME/.local/share/godot/export_templates/4.7.2.stable/android_debug.apk"
+
+      - name: Extract Afterfall V18 project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -s AfterfallBuriedV18-Project.zip
+          rm -rf project project-flat
+          mkdir -p project
+          unzip -q AfterfallBuriedV18-Project.zip -d project
+
+          if [ ! -f project/project.godot ]; then
+            CANDIDATE="$(find project -mindepth 2 -maxdepth 4 -name project.godot -print -quit)"
+            test -n "$CANDIDATE"
+            ROOT="$(dirname "$CANDIDATE")"
+            mkdir -p project-flat
+            cp -a "$ROOT/." project-flat/
+            rm -rf project
+            mv project-flat project
+          fi
+
+          echo "Project root:"
+          ls -la project | head -50
+          test -f project/project.godot
+          test -f project/export_presets.cfg
+
+      - name: Configure Android SDK and debug keystore
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "JAVA_HOME=$JAVA_HOME"
+          test -d "$ANDROID_HOME"
+
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Import project and check scripts
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+
+          timeout 240s "$GODOT"             --headless             --editor             --path project             --quit-after 10             2>&1 | tee godot-import.log
+
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Cannot open file|Failed to load script" godot-import.log; then
+            echo "Fatal script/resource error detected."
+            exit 3
+          fi
+
+      - name: Export Android debug APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          PRESET="$(awk -F'"' '/^name="/ { print $2; exit }' project/export_presets.cfg)"
+          test -n "$PRESET"
+          echo "Using preset: $PRESET"
+
+          mkdir -p build
+          "$GODOT"             --headless             --path project             --export-debug "$PRESET"             "$GITHUB_WORKSPACE/build/Afterfall-Buried-Days-V18.apk"             2>&1 | tee godot-export.log
+
+          test -s build/Afterfall-Buried-Days-V18.apk
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose build/Afterfall-Buried-Days-V18.apk
+          sha256sum build/Afterfall-Buried-Days-V18.apk             | tee build/Afterfall-Buried-Days-V18.apk.sha256
+          ls -lh build/Afterfall-Buried-Days-V18.apk
+
+      - name: Upload APK and build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Afterfall-Buried-Days-V18-Android
+          path: |
+            build/Afterfall-Buried-Days-V18.apk
+            build/Afterfall-Buried-Days-V18.apk.sha256
+            godot-import.log
+            godot-export.log
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
