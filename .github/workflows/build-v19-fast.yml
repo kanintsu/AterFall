@@ -102,3 +102,5 @@ jobs:
           compression-level: 0
 
 # rerun-after-indentation-fix
+
+# rerun-after-character-type-fix
