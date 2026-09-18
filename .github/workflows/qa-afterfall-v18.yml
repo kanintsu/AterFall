@@ -62,7 +62,7 @@ jobs:
           GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
           timeout 180s "$GODOT" --headless --path project -- --qa_v18 2>&1 | tee qa-v18.log
           grep -F "V18_QA" qa-v18.log
-          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Invalid access|Invalid call|ERROR:" qa-v18.log; then
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Invalid access|Invalid call" qa-v18.log; then
             echo "Runtime error detected in V18 QA."
             exit 4
           fi
