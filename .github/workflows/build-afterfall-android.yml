@@ -114,6 +114,11 @@ jobs:
           mkdir -p build
           "$GODOT"             --headless             --path project             --export-debug "$PRESET"             "$GITHUB_WORKSPACE/build/Afterfall-Buried-Days-V18.apk"             2>&1 | tee godot-export.log
 
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Failed to load script|Cannot open file" godot-export.log; then
+            echo "Fatal script/resource error detected during export."
+            exit 4
+          fi
+
           test -s build/Afterfall-Buried-Days-V18.apk
 
       - name: Verify APK
