@@ -25,39 +25,49 @@ jobs:
 
           MAIN="$(find /tmp/afterfall-repair -type f -path '*/scripts/main.gd' -print -quit)"
           test -n "$MAIN"
-
           export MAIN
+
           python3 - <<'PY'
           import os
           from pathlib import Path
 
           path = Path(os.environ["MAIN"])
-          text = path.read_text(encoding="utf-8")
+          lines = path.read_text(encoding="utf-8").splitlines()
 
-          old = '\t\t\t\tinventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
-          new = '''\t\t\tinventory.bandage+=1
-          \t\t\tif careful:
-          \t\t\t\tinventory.med+=1
-          \t\t\telse:
-          \t\t\t\tstress=mini(100,stress+2)
-          \t\t\t_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'''
+          needle = 'inventory.bandage+=1; if careful: inventory.med+=1; else: stress=mini(100,stress+2); _add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")'
 
-          if old not in text:
-              raise SystemExit("Expected V18 medical-room syntax was not found; refusing blind edit.")
+          matches = [i for i, line in enumerate(lines) if needle in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one medical-room line, found {len(matches)}")
 
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding="utf-8")
+          i = matches[0]
+          line = lines[i]
+          indent = line[:len(line) - len(line.lstrip(" \t"))]
+          child = indent + "\t"
 
-          leftovers = [(i + 1, line) for i, line in enumerate(text.splitlines()) if "; else:" in line]
+          replacement = [
+              indent + "inventory.bandage+=1",
+              indent + "if careful:",
+              child + "inventory.med+=1",
+              indent + "else:",
+              child + "stress=mini(100,stress+2)",
+              indent + '_add_event(location_name,"O material médico aproveitável foi separado do que já estava contaminado.")',
+          ]
+          lines[i:i+1] = replacement
+
+          leftovers = [(n + 1, line) for n, line in enumerate(lines) if "; else:" in line]
           print("Remaining '; else:' patterns:", len(leftovers))
           for item in leftovers[:20]:
               print(item)
           if leftovers:
               raise SystemExit("Other same-line else patterns remain; inspect before build.")
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("Patched", path)
           PY
 
           echo "Corrected area:"
-          nl -ba "$MAIN" | sed -n '6445,6465p'
+          nl -ba "$MAIN" | sed -n '6445,6468p'
 
           rm -f "$GITHUB_WORKSPACE/AfterfallBuriedV18-Project.zip"
           (
