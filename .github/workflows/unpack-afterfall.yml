@@ -1,0 +1,34 @@
+name: Unpack Afterfall V18 Source
+
+on:
+  push:
+    paths:
+      - '.github/workflows/unpack-afterfall.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack project into game/
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf game /tmp/afterfall-src
+          mkdir -p /tmp/afterfall-src
+          unzip -q AfterfallBuriedV18-Project.zip -d /tmp/afterfall-src
+          ROOT="$(dirname "$(find /tmp/afterfall-src -name project.godot -print -quit)")"
+          test -f "$ROOT/project.godot"
+          mkdir -p game
+          cp -a "$ROOT/." game/
+          rm -rf game/.godot
+          find game -name '*.import' -delete || true
+          git config user.name "Afterfall Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add game
+          git commit -m "Unpack Afterfall V18 source for V19 rebuild"
+          git push origin HEAD:main
