@@ -198,19 +198,19 @@ func _notification(what: int) -> void:
 		queue_redraw()
 
 func _scale_pos(p: Vector2) -> Vector2:
-	var s := min(size.x / DESIGN.x, size.y / DESIGN.y)
-	var off := (size - DESIGN * s) * 0.5
+	var s:float = minf(size.x / DESIGN.x, size.y / DESIGN.y)
+	var off:Vector2 = (size - DESIGN * s) * 0.5
 	return off + p * s
 
 func _to_design(p: Vector2) -> Vector2:
-	var s := min(size.x / DESIGN.x, size.y / DESIGN.y)
-	var off := (size - DESIGN * s) * 0.5
+	var s:float = minf(size.x / DESIGN.x, size.y / DESIGN.y)
+	var off:Vector2 = (size - DESIGN * s) * 0.5
 	return (p - off) / s
 
 func _draw() -> void:
 	hotspots.clear()
-	var s := min(size.x / DESIGN.x, size.y / DESIGN.y)
-	var off := (size - DESIGN * s) * 0.5
+	var s:float = minf(size.x / DESIGN.x, size.y / DESIGN.y)
+	var off:Vector2 = (size - DESIGN * s) * 0.5
 	draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
 	draw_set_transform(off, 0.0, Vector2(s,s))
 	match screen:
@@ -322,7 +322,6 @@ func _draw_menu() -> void:
 		draw_rect(Rect2(0,y,1648,80),Color(0.04+float(y)/24000.0,0.05,0.055,1))
 	for i in range(24):
 		var x:=float(i*76-20)
-		var h:=rng.seed if false else 0
 		var bh:=float(170 + (i*47)%360)
 		draw_rect(Rect2(x,700-bh,62,bh),Color("#15191a"))
 		draw_rect(Rect2(x,700-bh,62,bh),Color("#3d4140"),false,1)
@@ -512,8 +511,8 @@ func _draw_map() -> void:
 		draw_rect(r,Color("#232520"),true)
 		draw_rect(r,Color("#42453c"),false,2)
 		for i in range(7):
-			var bx:=r.position.x+20+(i*43)%int(max(44.0,r.size.x-60))
-			var by:=r.position.y+22+(i*67)%int(max(44.0,r.size.y-70))
+			var bx:float = r.position.x+20+float((i*43)%int(maxf(44.0,r.size.x-60)))
+			var by:float = r.position.y+22+float((i*67)%int(maxf(44.0,r.size.y-70)))
 			draw_rect(Rect2(bx,by,30,46),Color("#151715"),true)
 	_text("BAIRRO DO ABRIGO",Vector2(105,212),14,C_GREEN)
 	_text("CENTRO",Vector2(510,178),14,C_AMBER)
@@ -738,8 +737,8 @@ func _draw_research() -> void:
 		var col:=i%2
 		var row:=i/2
 		var r:=Rect2(80+col*760,220+row*190,700,160)
-		var built:=str(pr.id) in state.projects
-		var known:=_project_known(str(pr.id))
+		var built:bool = str(pr.id) in state.projects
+		var known:bool = _project_known(str(pr.id))
 		_panel(r,Color("#161817"),C_GREEN if built else (C_AMBER if known else Color("#454640")))
 		_text(str(pr.name),r.position+Vector2(24,36),21,C_INK if known else C_MUTED)
 		_text(str(pr.desc),r.position+Vector2(24,72),13,C_MUTED)
