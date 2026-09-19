@@ -499,7 +499,7 @@ func _draw_crates(p:Vector2,count:int) -> void:
 
 func _draw_survivor(p:Vector2,sc:float=1.0,armed:=true) -> void:
 	draw_circle(p-Vector2(0,110*sc),22*sc,Color("#0b0c0c"))
-	draw_polygon(PackedVector2Array([p-Vector2(35*sc,88*sc),p+Vector2(35*sc,-88*sc),p+Vector2(28*sc,20*sc),p+Vector2(44*sc,105*sc),p-Vector2(5*sc,105*sc),p-Vector2(30*sc,20*sc)]),PackedColorArray([Color("#111313")]))
+	draw_colored_polygon(PackedVector2Array([p+Vector2(-35*sc,-88*sc),p+Vector2(35*sc,-88*sc),p+Vector2(30*sc,20*sc),p+Vector2(44*sc,105*sc),p+Vector2(-5*sc,105*sc),p+Vector2(-30*sc,20*sc)]),Color("#111313"))
 	draw_line(p+Vector2(-18*sc,15*sc),p+Vector2(-35*sc,115*sc),Color("#0a0b0b"),18*sc)
 	draw_line(p+Vector2(18*sc,15*sc),p+Vector2(30*sc,115*sc),Color("#0a0b0b"),18*sc)
 	if armed:
@@ -723,7 +723,7 @@ func _draw_combat() -> void:
 
 func _draw_zombie(p:Vector2,sc:float) -> void:
 	draw_circle(p-Vector2(0,115*sc),26*sc,Color("#4c5046"))
-	draw_polygon(PackedVector2Array([p-Vector2(34*sc,85*sc),p+Vector2(32*sc,-85*sc),p+Vector2(45*sc,30*sc),p+Vector2(20*sc,105*sc),p-Vector2(30*sc,105*sc),p-Vector2(45*sc,20*sc)]),PackedColorArray([Color("#30332e")]))
+	draw_colored_polygon(PackedVector2Array([p+Vector2(-34*sc,-85*sc),p+Vector2(32*sc,-85*sc),p+Vector2(45*sc,30*sc),p+Vector2(20*sc,105*sc),p+Vector2(-30*sc,105*sc),p+Vector2(-45*sc,20*sc)]),Color("#30332e"))
 	draw_line(p+Vector2(-22,-45)*sc,p+Vector2(-72,15)*sc,Color("#3c4038"),15*sc)
 	draw_line(p+Vector2(22,-45)*sc,p+Vector2(68,5)*sc,Color("#3c4038"),15*sc)
 	draw_circle(p+Vector2(-9,-120)*sc,4*sc,C_RED)
@@ -1311,6 +1311,8 @@ func _load() -> bool:
 
 func _qa_reborn() -> void:
 	_new_game()
+	if screen==Screen.EVENT:
+		_resolve_event(0)
 	if screen!=Screen.SHELTER:
 		push_error("QA shelter")
 		get_tree().quit(2); return
