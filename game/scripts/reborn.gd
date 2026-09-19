@@ -14,7 +14,7 @@ const C_BLUE := Color("#66818b")
 const C_LINE := Color("#3c4140")
 const SAVE_PATH := "user://afterfall_reborn.json"
 
-enum Screen { MENU, SHELTER, MAP, LOCATION, COMBAT, INVENTORY, RESEARCH, CRAFTING, EVENT, HELP }
+enum Screen { MENU, SHELTER, MAP, LOCATION, COMBAT, INVENTORY, RESEARCH, CRAFTING, EVENT, TRAVEL, HELP }
 
 var screen: Screen = Screen.MENU
 var font: Font
@@ -28,6 +28,9 @@ var combat := {}
 var event_data := {}
 var selected_item := ""
 var tutorial_step := 0
+var travel_target := ""
+var travel_minutes := 0
+var travel_tip := ""
 
 var state := {
 	"day": 1,
@@ -223,6 +226,7 @@ func _draw() -> void:
 		Screen.RESEARCH: _draw_research()
 		Screen.CRAFTING: _draw_crafting()
 		Screen.EVENT: _draw_event()
+		Screen.TRAVEL: _draw_travel()
 		Screen.HELP: _draw_help()
 	if toast_text != "":
 		_panel(Rect2(410, 820, 828, 58), Color(0.02,0.02,0.02,0.94), C_AMBER)
@@ -772,6 +776,28 @@ func _draw_event() -> void:
 	for i in range(choices.size()):
 		_button("event:"+str(i),Rect2(300+i*350,640,300,72),str(choices[i].label),i==0,19)
 
+func _draw_travel() -> void:
+	draw_rect(Rect2(0,0,1648,920),Color("#0d1113"))
+	# A real transition screen built by the renderer, not a static background.
+	_draw_city(Vector2(0,40),0.7)
+	draw_rect(Rect2(0,470,1648,450),Color("#101313"),true)
+	for i in range(9):
+		var y:float=540.0+float(i)*42.0
+		draw_line(Vector2(0,y),Vector2(1648,y-115),Color("#262a29"),2)
+	_draw_survivor(Vector2(470,690),1.45,true)
+	_draw_rain()
+	_panel(Rect2(760,170,700,500),Color(0.025,0.027,0.027,0.94),Color("#6b604f"),3)
+	_text("A CAMINHO",Vector2(810,230),20,C_MUTED)
+	_text(travel_target,Vector2(810,285),42,C_INK)
+	_text("Tempo estimado: %d min"%travel_minutes,Vector2(810,335),18,C_AMBER)
+	var risk:int=int(LOCATIONS.get(travel_target,{}).get("risk",1))
+	_text("Risco conhecido: %s"%("BAIXO" if risk<=1 else ("MODERADO" if risk<=3 else "ALTO")),Vector2(810,370),17,C_INK)
+	_text("DICA DE SOBREVIVÊNCIA",Vector2(810,445),15,C_AMBER)
+	_text(travel_tip,Vector2(810,480),16,C_MUTED)
+	_text("A cidade continua existindo entre um destino e outro.",Vector2(810,535),13,C_MUTED)
+	_button("travel_continue",Rect2(810,585,270,64),"CONTINUAR",true,21)
+	_button("travel_cancel",Rect2(1100,585,270,64),"VOLTAR AO MAPA",false,18)
+
 func _draw_help() -> void:
 	draw_rect(Rect2(0,0,1648,920),Color("#0e1111"))
 	_text("COMO JOGAR",Vector2(70,100),38,C_INK)
@@ -830,6 +856,10 @@ func _action(id:String) -> void:
 			_toast("Aqui há espaço para um gerador. Pesquise e construa um.")
 	elif id=="leave_location":
 		_leave_location()
+	elif id=="travel_continue":
+		_finish_travel()
+	elif id=="travel_cancel":
+		travel_target=""; screen=Screen.MAP
 	elif id.begins_with("loc:"):
 		_travel_to(id.trim_prefix("loc:"))
 	elif id.begins_with("object:"):
@@ -862,8 +892,9 @@ func _new_game() -> void:
 	}
 	tutorial_step=0
 	current_location=""
-	screen=Screen.SHELTER
-	_toast("PRIMEIRO DIA: a água acaba em breve. Explore o abrigo e escolha sua primeira saída.")
+	event_data={"title":"PRIMEIRO DIA","text":"A chuva não parou desde ontem. A água do abrigo está acabando e o rádio só devolve estática.\n\nToque nos objetos do abrigo, prepare o que conseguir e saia quando estiver pronto. O Supermercado é o local mais próximo.","choices":[{"label":"COMEÇAR","action":"close"}]}
+	screen=Screen.EVENT
+	_toast("DICA: você não precisa decorar tudo. O jogo ensina cada sistema quando ele aparece.")
 	_save()
 
 func _objective() -> String:
@@ -881,12 +912,24 @@ func _objective() -> String:
 
 func _travel_to(name:String) -> void:
 	if not LOCATIONS.has(name): return
-	var mins:=int(LOCATIONS[name].distance)
+	travel_target=name
+	travel_minutes=int(LOCATIONS[name].distance)
+	travel_tip=TIPS[rng.randi_range(0,TIPS.size()-1)]
+	screen=Screen.TRAVEL
+	queue_redraw()
+
+func _finish_travel() -> void:
+	if travel_target=="" or not LOCATIONS.has(travel_target):
+		screen=Screen.MAP
+		return
+	var name:String=travel_target
+	var mins:int=travel_minutes
 	_advance(mins)
 	state.flags["first_trip"]=true
 	current_location=name
 	state.visited[name]=int(state.visited.get(name,0))+1
-	_toast("Chegada em %s • %d min • %s"%[name,mins,TIPS[rng.randi_range(0,TIPS.size()-1)]])
+	travel_target=""
+	_toast("Chegada em %s • %d min"%[name,mins])
 	if rng.randf()<0.22+float(LOCATIONS[name].risk)*0.05:
 		_start_combat(name,int(LOCATIONS[name].risk))
 	else:
@@ -1249,6 +1292,7 @@ func _qa_reborn() -> void:
 		push_error("QA shelter")
 		get_tree().quit(2); return
 	_travel_to("SUPERMERCADO")
+	_finish_travel()
 	screen=Screen.LOCATION
 	_search_object("office")
 	if not bool(state.flags.get("manual_found",false)):
