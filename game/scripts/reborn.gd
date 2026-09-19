@@ -140,7 +140,7 @@ const LOCATIONS := {
 }
 
 const PROJECTS := [
-	{"id":"desk","name":"MESA DE PESQUISA","need":{"scrap":4,"wood":3},"rp":0,"desc":"Permite estudar manuais, peças e projetos encontrados na cidade."},
+	{"id":"desk","name":"MESA DE PESQUISA","need":{"scrap":4,"wood":2},"rp":0,"desc":"Permite estudar manuais, peças e projetos encontrados na cidade."},
 	{"id":"filter","name":"FILTRO DE ÁGUA","need":{"scrap":3,"cloth":2},"rp":2,"desc":"Transforma água encontrada em reserva segura no abrigo."},
 	{"id":"pack","name":"MOCHILA REFORÇADA","need":{"cloth":3,"parts":2},"rp":3,"desc":"Aumenta o peso que você consegue trazer em cada viagem."},
 	{"id":"generator","name":"GERADOR","need":{"parts":4,"electronics":2,"fuel":1},"rp":4,"desc":"Energia para rádio, enfermaria e pesquisas avançadas."},
@@ -745,6 +745,7 @@ func _draw_research() -> void:
 		_text(_need_text(pr.need)+" • pesquisa "+str(pr.rp),r.position+Vector2(24,120),13,C_AMBER if known else C_MUTED)
 		_text("CONCLUÍDO" if built else ("TOQUE PARA CONSTRUIR" if known else "CONHECIMENTO AUSENTE"),r.position+Vector2(470,130),12,C_GREEN if built else C_MUTED)
 		hotspots.append({"id":"project:"+str(pr.id),"rect":r})
+	_button("crafting",Rect2(930,830,280,58),"FABRICAÇÃO")
 	_button("shelter",Rect2(1260,830,280,58),"VOLTAR AO ABRIGO")
 
 func _draw_crafting() -> void:
@@ -808,10 +809,12 @@ func _action(id:String) -> void:
 	elif id=="back_context":
 		screen=Screen.SHELTER if current_location=="" else Screen.LOCATION
 	elif id=="research":
-		if int(state.facilities.research)<=0:
-			_toast("Você ainda não construiu a Mesa de Pesquisa.")
+		screen=Screen.RESEARCH
+	elif id=="crafting":
+		if int(state.facilities.workshop)<=0:
+			_toast("Monte primeiro a Mesa de Pesquisa/Oficina improvisada.")
 		else:
-			screen=Screen.RESEARCH
+			screen=Screen.CRAFTING
 	elif id=="storage":
 		screen=Screen.INVENTORY
 	elif id=="rest":
@@ -951,8 +954,14 @@ func _grant_loot(kind:String,loc:String,obj:String) -> String:
 			return "O veículo ainda pode ensinar alguma coisa. +2 peças, +1 conhecimento."
 		_:
 			var s:=rng.randi_range(1,2); state.scrap=int(state.scrap)+s
-			if rng.randf()<0.4: state.cloth=int(state.cloth)+1
-			return "Você separou alguns materiais ainda aproveitáveis."
+			var extra:=""
+			if rng.randf()<0.45:
+				state.cloth=int(state.cloth)+1
+				extra=" e tecido"
+			elif rng.randf()<0.45:
+				state.wood=int(state.wood)+1
+				extra=" e madeira"
+			return "Você separou %d sucata%s ainda aproveitável."%[s,extra]
 
 func _discovery_logic(loc:String,obj:String,kind:String) -> void:
 	if loc=="SUPERMERCADO" and obj=="office":
