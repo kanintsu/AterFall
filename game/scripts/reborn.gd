@@ -1251,7 +1251,7 @@ func _qa_reborn() -> void:
 		push_error("QA research")
 		get_tree().quit(4); return
 	_start_combat("SUPERMERCADO",1)
-	for e in combat.enemies: e.hp=1
+	combat.enemies[0]["hp"]=1
 	combat.distance=1
 	_combat_attack()
 	if screen!=Screen.LOCATION:
