@@ -258,6 +258,29 @@ func _center(t:String, r:Rect2, fs:int=20, col:Color=C_INK) -> void:
 	var w := font.get_string_size(t,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x
 	draw_string(font,Vector2(r.position.x+(r.size.x-w)*0.5,r.position.y+r.size.y*0.62),t,HORIZONTAL_ALIGNMENT_LEFT,-1,fs,col)
 
+func _paragraph(t:String, p:Vector2, max_w:float, fs:int=16, col:Color=C_MUTED, line_h:float=24.0) -> float:
+	var y:float=p.y
+	for raw_v in t.split("\n"):
+		var raw:String=str(raw_v)
+		if raw=="":
+			y+=line_h
+			continue
+		var line:String=""
+		for word_v in raw.split(" "):
+			var word:String=str(word_v)
+			var candidate:String=word if line=="" else line+" "+word
+			var width:float=font.get_string_size(candidate,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x
+			if width>max_w and line!="":
+				_text(line,Vector2(p.x,y),fs,col)
+				y+=line_h
+				line=word
+			else:
+				line=candidate
+		if line!="":
+			_text(line,Vector2(p.x,y),fs,col)
+			y+=line_h
+	return y
+
 func _panel(r:Rect2, fill:Color=C_PANEL, edge:Color=C_LINE, width:float=2.0) -> void:
 	draw_rect(r,fill,true)
 	draw_rect(r,edge,false,width)
@@ -557,7 +580,7 @@ func _draw_location() -> void:
 	_draw_rain()
 	_panel(Rect2(34,100,570,88),Color(0.02,0.02,0.02,0.78),C_LINE)
 	_text(current_location,Vector2(56,134),29,C_INK)
-	_text(str(data.get("desc","")),Vector2(56,163),13,C_MUTED)
+	_paragraph(str(data.get("desc","")),Vector2(56,158),520.0,12,C_MUTED,17.0)
 	for obj in data.get("objects",[]):
 		var key:=current_location+"|"+str(obj.id)
 		var searched:=bool(state.searched.get(key,false))
@@ -771,7 +794,7 @@ func _draw_event() -> void:
 	_hud()
 	_panel(Rect2(220,160,1208,600),Color("#141616"),Color("#6b604f"),3)
 	_text(str(event_data.get("title","EVENTO")),Vector2(270,225),35,C_INK)
-	_text(str(event_data.get("text","")),Vector2(270,280),18,C_MUTED)
+	_paragraph(str(event_data.get("text","")),Vector2(270,285),1080.0,18,C_MUTED,29.0)
 	var choices:Array=event_data.get("choices",[])
 	for i in range(choices.size()):
 		_button("event:"+str(i),Rect2(300+i*350,640,300,72),str(choices[i].label),i==0,19)
@@ -793,7 +816,7 @@ func _draw_travel() -> void:
 	var risk:int=int(LOCATIONS.get(travel_target,{}).get("risk",1))
 	_text("Risco conhecido: %s"%("BAIXO" if risk<=1 else ("MODERADO" if risk<=3 else "ALTO")),Vector2(810,370),17,C_INK)
 	_text("DICA DE SOBREVIVÊNCIA",Vector2(810,445),15,C_AMBER)
-	_text(travel_tip,Vector2(810,480),16,C_MUTED)
+	_paragraph(travel_tip,Vector2(810,480),590.0,16,C_MUTED,24.0)
 	_text("A cidade continua existindo entre um destino e outro.",Vector2(810,535),13,C_MUTED)
 	_button("travel_continue",Rect2(810,585,270,64),"CONTINUAR",true,21)
 	_button("travel_cancel",Rect2(1100,585,270,64),"VOLTAR AO MAPA",false,18)
