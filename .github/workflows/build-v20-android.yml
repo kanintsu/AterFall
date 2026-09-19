@@ -1,0 +1,112 @@
+name: Build AFTERFALL V20 Android
+
+on:
+  push:
+    paths:
+      - '.github/workflows/build-v20-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2 and templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 4 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          curl -L --fail --retry 4 -o /tmp/templates.tpz https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          mkdir -p /tmp/templates "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          cp -a /tmp/templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Import and strict parse
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          timeout 240s "$GODOT" --headless --editor --path game --import 2>&1 | tee import-v20.log
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Failed to load script|Invalid access|Invalid call" import-v20.log; then exit 3; fi
+
+      - name: V20 gameplay QA
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          timeout 90s "$GODOT" --headless --path game -- --qa_v20 2>&1 | tee qa-v20.log
+          grep -F "V20_QA failures=[]" qa-v20.log
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Invalid access|Invalid call" qa-v20.log; then exit 4; fi
+
+      - name: Render V20 visual captures
+        shell: bash
+        run: |
+          set -euxo pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          for view in menu shelter map market combat research; do
+            timeout 60s xvfb-run -a "$GODOT" --path game --rendering-method gl_compatibility -- --capture_v20_$view 2>&1 | tee capture-$view.log
+            test -s "game/capture_v20_$view.png"
+            if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Invalid access|Invalid call" "capture-$view.log"; then exit 5; fi
+          done
+
+      - name: Export and verify Android APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          PRESET="$(awk -F'"' '/^name="/ {print $2; exit}' game/export_presets.cfg)"
+          mkdir -p build
+          "$GODOT" --headless --path game --export-debug "$PRESET" "$GITHUB_WORKSPACE/build/Afterfall-Ainda-Ha-Amanha-V20.apk" 2>&1 | tee export-v20.log
+          if grep -E "SCRIPT ERROR|Parse Error|Parser Error|Failed to load script|Invalid access|Invalid call" export-v20.log; then exit 6; fi
+          test -s build/Afterfall-Ainda-Ha-Amanha-V20.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose build/Afterfall-Ainda-Ha-Amanha-V20.apk
+          sha256sum build/Afterfall-Ainda-Ha-Amanha-V20.apk | tee build/Afterfall-Ainda-Ha-Amanha-V20.apk.sha256
+          ls -lh build/Afterfall-Ainda-Ha-Amanha-V20.apk
+
+      - name: Upload V20 build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Afterfall-Ainda-Ha-Amanha-V20-Android
+          path: |
+            build/Afterfall-Ainda-Ha-Amanha-V20.apk
+            build/Afterfall-Ainda-Ha-Amanha-V20.apk.sha256
+            game/capture_v20_menu.png
+            game/capture_v20_shelter.png
+            game/capture_v20_map.png
+            game/capture_v20_market.png
+            game/capture_v20_combat.png
+            game/capture_v20_research.png
+            import-v20.log
+            qa-v20.log
+            export-v20.log
+            capture-*.log
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
