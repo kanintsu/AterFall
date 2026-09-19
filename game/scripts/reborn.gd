@@ -172,8 +172,14 @@ func _ready() -> void:
 	set_process(true)
 	for i in range(90):
 		rain.append(Vector2(rng.randf_range(0, DESIGN.x), rng.randf_range(0, DESIGN.y)))
-	if "--qa_reborn" in OS.get_cmdline_user_args():
+	var args:=OS.get_cmdline_user_args()
+	if "--qa_reborn" in args:
 		call_deferred("_qa_reborn")
+	else:
+		for arg in args:
+			if str(arg).begins_with("--capture_reborn_"):
+				call_deferred("_capture_reborn",str(arg).trim_prefix("--capture_reborn_"))
+				break
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -1254,4 +1260,31 @@ func _qa_reborn() -> void:
 		get_tree().quit(5); return
 	_save()
 	print("REBORN_QA PASS known=%d projects=%d hp=%d"%[state.known.size(),state.projects.size(),int(state.health)])
+	get_tree().quit(0)
+
+func _capture_reborn(which:String) -> void:
+	_new_game()
+	match which:
+		"menu":
+			screen=Screen.MENU
+		"shelter":
+			screen=Screen.SHELTER
+		"map":
+			screen=Screen.MAP
+		"market":
+			current_location="SUPERMERCADO"; screen=Screen.LOCATION
+		"combat":
+			current_location="POSTO"; _start_combat("POSTO",2)
+		"research":
+			state.facilities.research=1; state.research=8; state.flags["manual_found"]=true; state.known.append("POSTO"); state.known.append("OFICINA"); screen=Screen.RESEARCH
+		_:
+			screen=Screen.SHELTER
+	queue_redraw()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var img:=get_viewport().get_texture().get_image()
+	var path:="res://capture_reborn_%s.png"%which
+	var err:=img.save_png(path)
+	print("REBORN_CAPTURE %s err=%d"%[path,err])
 	get_tree().quit(0)
